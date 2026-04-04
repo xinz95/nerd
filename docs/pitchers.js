@@ -149,11 +149,21 @@ async function loadPitchers() {
       effectiveSeasonStats, effectiveSaberStats, pitchDataMap, minIp
     );
 
-    // Build player name map: season stats first, then schedule overrides
-    // (schedule gives the current team for pitchers who've changed teams)
+    // Build player name map: prior-year stats first, then current-year stats
+    // (for team accuracy), then upcoming schedule (most authoritative for current team)
     const playerNames = {}; // { pid: { name, teamAbbr } }
     for (const [pid, s] of Object.entries(effectiveSeasonStats)) {
       if (s.name) playerNames[pid] = { name: s.name, teamAbbr: s.teamAbbr || '—' };
+    }
+    // Override team with current-year data — covers players who changed teams since last year
+    for (const [pid, s] of Object.entries(seasonStats)) {
+      if (s.teamAbbr) {
+        if (playerNames[pid]) {
+          playerNames[pid].teamAbbr = s.teamAbbr;
+        } else if (s.name) {
+          playerNames[pid] = { name: s.name, teamAbbr: s.teamAbbr };
+        }
+      }
     }
     for (const schedule of upcomingSchedules) {
       for (const g of schedule) {
@@ -179,8 +189,8 @@ async function loadPitchers() {
           ip:          comp?.ip     ?? s.ip ?? 0,
           xfip:        comp?.xfip   ?? null,
           usedFip:     comp?.usedFip ?? false,
-          kPct:        comp?.kPct   ?? null,
-          bbPct:       comp?.bbPct  ?? null,
+          kPct:        comp?.kPct   ?? s.kPct  ?? null,
+          bbPct:       comp?.bbPct  ?? s.bbPct ?? null,
           velocity:    comp?.velocity ?? null, // already null when noPitchData
           ivb:         comp?.ivb      ?? null,
           absHb:       comp?.absHb    ?? null,

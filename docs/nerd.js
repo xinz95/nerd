@@ -181,16 +181,20 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
 const TNERD_WEIGHTS = { wrcPlus: 0.35, proxyEra: 0.30, luck: 0.20, absDiff: 0.15 };
 
 function computeAllTnerds(standings, hittingSaber, minGames = 3) {
-  // Aggregate median wRC+ per team
-  const teamWrc = {};
+  // Aggregate PA-weighted mean wRC+ per team.
+  // Weighting by plate appearances ensures that full-time regulars drive the
+  // team score rather than bench players or call-ups with a handful of PAs.
+  const teamWrcAcc = {}; // { teamId: { weightedSum, totalPa } }
   for (const h of Object.values(hittingSaber)) {
-    const { teamId, wrcPlus } = h;
-    if (!teamId || wrcPlus == null) continue;
-    (teamWrc[teamId] = teamWrc[teamId] || []).push(wrcPlus);
+    const { teamId, wrcPlus, pa } = h;
+    if (!teamId || wrcPlus == null || pa < 10) continue;
+    if (!teamWrcAcc[teamId]) teamWrcAcc[teamId] = { weightedSum: 0, totalPa: 0 };
+    teamWrcAcc[teamId].weightedSum += wrcPlus * pa;
+    teamWrcAcc[teamId].totalPa    += pa;
   }
   const teamMedianWrc = {};
-  for (const [tid, vals] of Object.entries(teamWrc)) {
-    teamMedianWrc[tid] = median(vals);
+  for (const [tid, { weightedSum, totalPa }] of Object.entries(teamWrcAcc)) {
+    if (totalPa > 0) teamMedianWrc[tid] = weightedSum / totalPa;
   }
 
   const rows = {};

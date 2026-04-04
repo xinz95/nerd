@@ -169,7 +169,7 @@ async function getPitcherSabermetrics(season, endDate = null) {
 }
 
 async function getHittingSabermetrics(season, endDate = null) {
-  const key    = `hitting_saber_all_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const key    = `hitting_saber_all_v2_${season}${endDate ? `_thru_${endDate}` : ''}`;
   const params = { stats: 'sabermetrics', group: 'hitting', season, sportId: 1, limit: 2000, playerPool: 'All' };
   if (endDate) params.endDate = endDate;
   const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
@@ -184,6 +184,7 @@ async function getHittingSabermetrics(season, endDate = null) {
       woba: parseFloat(s.woba) || null,
       war: parseFloat(s.war) || null,
       teamId: split.team?.id || null,
+      pa: parseInt(s.plateAppearances) || 0,
     };
   }
   return result;
