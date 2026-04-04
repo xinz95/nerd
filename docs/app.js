@@ -187,10 +187,13 @@ async function loadGames(date) {
 
     setStatus(`Fetching pitcher velocity data… (this may take a moment on first load)`);
 
-    // Fetch velocities only for today's probable pitchers
-    const pitcherIds = [...new Set(
-      schedule.flatMap(g => [g.homePitcherId, g.awayPitcherId]).filter(Boolean)
-    )];
+    // Fetch pitch data for ALL qualifying starters (same population as the pitcher list page)
+    // so that pNERD z-scores are normalized over the same pool and scores stay consistent.
+    const allStarterIds = Object.entries(effectiveSeasonStats)
+      .filter(([, s]) => (s.gamesStarted || 0) >= 1)
+      .map(([pid]) => Number(pid));
+    const todayStarterIds = schedule.flatMap(g => [g.homePitcherId, g.awayPitcherId]).filter(Boolean).map(Number);
+    const pitcherIds = [...new Set([...allStarterIds, ...todayStarterIds])];
     // During March/April use prior year pitch data; otherwise use current year.
     const pitchSeason = isEarlySeason ? season - 1 : season;
     let pitchDataMap = await getPitcherPitchDataParallel(pitcherIds, pitchSeason, date);
