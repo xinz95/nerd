@@ -26,8 +26,8 @@ function zscore(value, mu, sigma) {
 }
 
 function zToTen(z) {
-  const clipped = Math.max(-3, Math.min(3, z));
-  return 5.0 + (clipped / 3) * 5;
+  const clipped = Math.max(-2, Math.min(2, z));
+  return 5.0 + (clipped / 2) * 5;
 }
 
 function pythagoreanWinPct(rs, ra, exp = 1.83) {

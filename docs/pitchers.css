@@ -194,7 +194,6 @@ sup { font-size: 0.65em; color: var(--text-muted); }
   letter-spacing: 0.08em;
   padding: 0.3rem 0.75rem 0;
   color: var(--text-muted);
-  opacity: 0.6;
   background: var(--surface);
 }
 
