@@ -211,7 +211,7 @@ async function loadGames(date) {
       if (!flags[pid]) flags[pid] = [];
       if (!flags[pid].includes(bFlag)) flags[pid].push(bFlag);
     }
-    const tnerds = computeAllTnerds(standings, hittingSaber);
+    const { tnerds } = computeAllTnerds(standings, hittingSaber);
 
     // Assemble game results
     const results = schedule.map(g => {

@@ -202,24 +202,28 @@ function computeAllTnerds(standings, hittingSaber, minGames = 3) {
     const total = wins + losses;
     const actualWinPct = total > 0 ? wins / total : 0.5;
     const pythWinPct = pythagoreanWinPct(rs, ra);
-    const luck = actualWinPct - pythWinPct;
-    const proxyEra = gp > 0 ? (ra / (gp * 9)) * 9 : 4.5;
-    const rdPerGame = gp > 0 ? Math.abs(rd / gp) : 0;
+    const luck           = actualWinPct - pythWinPct;
+    const proxyEra       = gp > 0 ? (ra / (gp * 9)) * 9 : 4.5;
+    const signedRdPerGame = gp > 0 ? rd / gp : 0;
+    const absRdPerGame   = Math.abs(signedRdPerGame);
 
     rows[tid] = {
       wrcPlus: teamMedianWrc[tid] ?? 100,
       proxyEra,
       luck,
-      absRdPerGame: rdPerGame,
+      signedRdPerGame,
+      absRdPerGame,
+      wins, losses, gp,
     };
   }
 
-  const tids = Object.keys(rows);
-  const tnerds = {};
+  const tids       = Object.keys(rows);
+  const tnerds     = {};
+  const components = {};
 
   if (tids.length === 0) {
     for (const tid of Object.keys(standings)) tnerds[tid] = 5.0;
-    return tnerds;
+    return { tnerds, components: {} };
   }
 
   const wrcVals  = tids.map(t => rows[t].wrcPlus);
@@ -246,13 +250,27 @@ function computeAllTnerds(standings, hittingSaber, minGames = 3) {
       zRd   * TNERD_WEIGHTS.absDiff;
 
     tnerds[tid] = zToTen(compositeZ);
+    components[tid] = {
+      wrcPlus:         r.wrcPlus,
+      proxyEra:        r.proxyEra,
+      luck:            r.luck,
+      signedRdPerGame: r.signedRdPerGame,
+      wins:            r.wins,
+      losses:          r.losses,
+      gp:              r.gp,
+      // Directional z-scores: positive = good for tNERD
+      zWrc, zEra, zLuck, zRd,
+    };
   }
 
   for (const tid of Object.keys(standings)) {
-    if (!(tid in tnerds)) tnerds[tid] = 5.0;
+    if (!(tid in tnerds)) {
+      tnerds[tid] = 5.0;
+      components[tid] = null;
+    }
   }
 
-  return tnerds;
+  return { tnerds, components };
 }
 
 // ---------------------------------------------------------------------------

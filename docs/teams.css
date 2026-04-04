@@ -1,0 +1,150 @@
+/* Team NERD list page — layered on top of style.css */
+
+.header-links a {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.header-links a:hover { color: var(--text); }
+
+/* ------------------------------------------------------------------ */
+/* Toolbar                                                              */
+/* ------------------------------------------------------------------ */
+.teams-toolbar {
+  max-width: 900px;
+  margin: 1.25rem auto 0.75rem;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.toolbar-summary {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* Table wrapper                                                        */
+/* ------------------------------------------------------------------ */
+.teams-table-wrap {
+  max-width: 900px;
+  margin: 0 auto 3rem;
+  padding: 0 1.5rem;
+  overflow-x: auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* Table                                                                */
+/* ------------------------------------------------------------------ */
+.teams-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.87rem;
+  white-space: nowrap;
+}
+
+.teams-table thead {
+  position: sticky;
+  top: 61px;
+  z-index: 5;
+}
+
+.teams-table th {
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-align: left;
+  user-select: none;
+}
+
+.teams-table th.sortable { cursor: pointer; }
+.teams-table th.sortable:hover { color: var(--text); }
+.teams-table th.num,
+.teams-table td.num { text-align: right; }
+
+.teams-table th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+.teams-table th.sort-asc::after  { content: ' ↑'; color: var(--accent); }
+
+.teams-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.teams-table tbody tr:hover td { background: var(--surface); }
+
+.col-team-name {
+  font-weight: 500;
+  min-width: 170px;
+}
+
+.col-abbr {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  min-width: 42px;
+}
+
+.record-cell { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.tnerd-cell { font-variant-numeric: tabular-nums; min-width: 58px; }
+
+.na { color: var(--text-muted); opacity: 0.45; }
+
+/* ------------------------------------------------------------------ */
+/* Legend                                                               */
+/* ------------------------------------------------------------------ */
+.table-legend {
+  max-width: 900px;
+  margin: -1rem auto 2rem;
+  padding: 0 1.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Loading / error                                                      */
+/* ------------------------------------------------------------------ */
+.teams-loading {
+  max-width: 900px;
+  margin: 3rem auto;
+  padding: 0 1.5rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.teams-error {
+  max-width: 900px;
+  margin: 1.5rem auto;
+  padding: 0 1.5rem;
+}
+
+.teams-error div {
+  background: rgba(224, 82, 82, 0.15);
+  border: 1px solid var(--nerd-low);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  color: #f08080;
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive                                                           */
+/* ------------------------------------------------------------------ */
+@media (max-width: 680px) {
+  .col-proxy-era { display: none; }
+  .brand-sub     { display: none; }
+}
+
+@media (max-width: 520px) {
+  .col-rd { display: none; }
+}

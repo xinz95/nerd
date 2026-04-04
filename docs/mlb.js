@@ -208,6 +208,8 @@ async function getStandings(season, endDate = null) {
         runsScored: parseInt(tr.runsScored) || 0,
         runsAllowed: parseInt(tr.runsAllowed) || 0,
         runDifferential: parseInt(tr.runDifferential) || 0,
+        name: tr.team?.name || null,
+        abbr: tr.team?.abbreviation || null,
       };
     }
   }

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team NERD List — Baseball Watchability</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="teams.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-nerd">NERD</span>
+        <span class="brand-sub">Baseball Watchability</span>
+      </div>
+      <nav class="header-links">
+        <a href="index.html">← Today's Games</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="teams-toolbar">
+    <div class="toolbar-summary">
+      <span id="row-count">—</span> teams &bull; <span id="updated-at">loading…</span>
+    </div>
+  </div>
+
+  <div id="loading-wrap" class="teams-loading">Loading team stats…</div>
+  <div id="error-wrap" class="teams-error hidden"><div id="error-msg"></div></div>
+
+  <div class="teams-table-wrap hidden" id="table-wrap">
+    <table class="teams-table">
+      <thead>
+        <tr>
+          <th class="sortable col-team-name" data-col="name">Team</th>
+          <th class="col-abbr">Abbr</th>
+          <th class="sortable num" data-col="w" title="Wins">W</th>
+          <th class="sortable num" data-col="l" title="Losses">L</th>
+          <th class="sortable num" data-col="wrc" title="Median wRC+ across qualified batters. League average = 100.">wRC+</th>
+          <th class="sortable num col-proxy-era" data-col="pera" title="Proxy ERA — runs allowed per 9 innings (lower = better)">pERA</th>
+          <th class="sortable num" data-col="luck" title="Pythagorean luck: actual win% minus expected win%. Negative = underperforming (more interesting).">Luck</th>
+          <th class="sortable num col-rd" data-col="rd" title="Run differential per game (signed). Teams near 0 are more competitive.">RD/G</th>
+          <th class="sortable num" data-col="tnerd" title="Team NERD score (0–10)">tNERD</th>
+        </tr>
+      </thead>
+      <tbody id="team-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="table-legend hidden" id="table-legend">
+    <span>Stat colors: <span style="color:#4caf74">green = better for watchability</span> &nbsp; <span style="color:#e05252">red = worse</span></span>
+    <span>Luck: negative = underperforming (regression expected = more interesting)</span>
+  </div>
+
+  <footer>
+    Data: <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>
+    &nbsp;&bull;&nbsp; <a href="pitchers.html">Pitcher NERD List</a>
+    &nbsp;&bull;&nbsp; <a href="methodology.html">Methodology</a>
+  </footer>
+
+  <script src="mlb.js"></script>
+  <script src="nerd.js"></script>
+  <script src="teams.js"></script>
+</body>
+</html>
