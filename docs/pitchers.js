@@ -114,18 +114,19 @@ async function loadPitchers() {
       }
     }
 
-    // Blend with prior year if early season
+    // Use prior year stats for all March/April games (small sample size)
+    const todayMonth = parseInt(today.slice(5, 7));
+    const isEarlySeason = todayMonth <= 4;
     let effectiveSeasonStats = seasonStats;
     let effectiveSaberStats  = saberStats;
-    if (avgGp < 30) {
-      setStatus('Blending with prior year stats…');
+    if (isEarlySeason) {
+      setStatus('Fetching prior season stats (March/April)…');
       const [priorSeason, priorSaber] = await Promise.all([
         getPitcherSeasonStats(season - 1),
         getPitcherSabermetrics(season - 1),
       ]);
-      const blended = blendPitcherStats(seasonStats, saberStats, priorSeason, priorSaber);
-      effectiveSeasonStats = blended.blendedSeason;
-      effectiveSaberStats  = blended.blendedSaber;
+      effectiveSeasonStats = priorSeason;
+      effectiveSaberStats  = priorSaber;
     }
 
     // Build the union of pitcher IDs to display:
@@ -139,23 +140,9 @@ async function loadPitchers() {
 
     setStatus(`Fetching pitch data for ${allPitcherIds.length} pitchers… (cached after first load)`);
 
-    // Exclude today's games from pitch data (same cutoff as season stats).
-    let pitchDataMap = await getPitcherPitchDataParallel(allPitcherIds, season, today);
-
-    // Fall back to prior-year pitch data if still early season and data missing
-    if (avgGp < 30) {
-      const missingIds = allPitcherIds.filter(pid => {
-        const pd = pitchDataMap[pid];
-        return pd == null || (pd.velocity == null && pd.ivb == null);
-      });
-      if (missingIds.length > 0) {
-        const priorPitch = await getPitcherPitchDataParallel(missingIds, season - 1);
-        pitchDataMap = { ...pitchDataMap };
-        for (const pid of missingIds) {
-          if (priorPitch[pid]?.velocity != null) pitchDataMap[pid] = priorPitch[pid];
-        }
-      }
-    }
+    // During March/April use prior year pitch data; otherwise use current year.
+    const pitchSeason = isEarlySeason ? season - 1 : season;
+    const pitchDataMap = await getPitcherPitchDataParallel(allPitcherIds, pitchSeason, today);
 
     setStatus('Computing scores…');
     const { pnerds, flags, components } = computeAllPnerds(

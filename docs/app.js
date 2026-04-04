@@ -58,7 +58,6 @@ function renderCard(game) {
     no_pitch_data:     ['', 'no pitch data'],
     insufficient_data: ['', 'limited data'],
     prior_year_stats:  ['', '2025 stats'],
-    blended_stats:     ['', 'blended stats'],
   };
   const seen = new Set();
   const flagsHtml = (game.flags || [])
@@ -155,26 +154,28 @@ async function loadGames(date) {
       return;
     }
 
-    // Estimate how far into the season we are
+    // Estimate how far into the season we are (for minIp threshold)
     const gpVals = Object.values(standings).map(s => s.gamesPlayed).filter(g => g > 0);
     const avgGp = gpVals.length ? gpVals.reduce((a, b) => a + b, 0) / gpVals.length : 1;
     const minIp = Math.max(3, avgGp);
 
-    // Blend with prior year stats for first 30 games of the season
+    // Use prior year stats for all March/April games (small sample size)
+    const gameMonth = parseInt(date.slice(5, 7));
+    const isEarlySeason = gameMonth <= 4;
     let effectiveSeasonStats = seasonStats;
     let effectiveSaberStats  = saberStats;
     let blendFlags            = {};
 
-    if (avgGp < 30) {
-      setStatus('Fetching prior season stats for blending…');
+    if (isEarlySeason) {
+      setStatus('Fetching prior season stats (March/April)…');
       const [priorSeason, priorSaber] = await Promise.all([
         getPitcherSeasonStats(season - 1),
         getPitcherSabermetrics(season - 1),
       ]);
-      const blended = blendPitcherStats(seasonStats, saberStats, priorSeason, priorSaber);
-      effectiveSeasonStats = blended.blendedSeason;
-      effectiveSaberStats  = blended.blendedSaber;
-      blendFlags            = blended.blendFlags;
+      effectiveSeasonStats = priorSeason;
+      effectiveSaberStats  = priorSaber;
+      const allPriorPids = new Set([...Object.keys(priorSeason), ...Object.keys(priorSaber)]);
+      for (const pid of allPriorPids) blendFlags[pid] = 'prior_year_stats';
     }
 
     setStatus(`Fetching pitcher velocity data… (this may take a moment on first load)`);
@@ -183,23 +184,9 @@ async function loadGames(date) {
     const pitcherIds = [...new Set(
       schedule.flatMap(g => [g.homePitcherId, g.awayPitcherId]).filter(Boolean)
     )];
-    // Exclude today's start so pitch data only covers games before this date.
-    let pitchDataMap = await getPitcherPitchDataParallel(pitcherIds, season, date);
-
-    // For pitchers with no current-year pitch data, fall back to prior year
-    if (avgGp < 30) {
-      const missingIds = pitcherIds.filter(pid => {
-        const pd = pitchDataMap[pid];
-        return pd == null || (pd.velocity == null && pd.ivb == null);
-      });
-      if (missingIds.length > 0) {
-        const priorPitchData = await getPitcherPitchDataParallel(missingIds, season - 1);
-        pitchDataMap = { ...pitchDataMap };
-        for (const pid of missingIds) {
-          if (priorPitchData[pid]?.velocity != null) pitchDataMap[pid] = priorPitchData[pid];
-        }
-      }
-    }
+    // During March/April use prior year pitch data; otherwise use current year.
+    const pitchSeason = isEarlySeason ? season - 1 : season;
+    let pitchDataMap = await getPitcherPitchDataParallel(pitcherIds, pitchSeason, date);
 
     setStatus('Computing scores…');
     const { pnerds, flags: pnerdFlags } = computeAllPnerds(effectiveSeasonStats, effectiveSaberStats, pitchDataMap, minIp);
