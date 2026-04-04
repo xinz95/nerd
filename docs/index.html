@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NERD — Baseball Watchability</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-nerd">NERD</span>
+        <span class="brand-sub">Baseball Watchability</span>
+      </div>
+      <nav class="date-nav">
+        <button id="prev-day" aria-label="Previous day">&#8592;</button>
+        <span id="date-display"></span>
+        <button id="next-day" aria-label="Next day">&#8594;</button>
+      </nav>
+    </div>
+  </header>
+
+  <div class="legend">
+    <span class="legend-label">0</span>
+    <div class="legend-bar"></div>
+    <span class="legend-label">10</span>
+    <span class="legend-hint">higher = more watchable</span>
+  </div>
+
+  <main id="main">
+    <div id="loading" class="loading">Loading games&hellip;</div>
+    <div id="error" class="error hidden"></div>
+    <div id="no-games" class="no-games hidden">No games scheduled for this date.</div>
+    <div id="cards" class="cards-grid"></div>
+  </main>
+
+  <footer>
+    Data: <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>
+    &nbsp;&bull;&nbsp; Scores refresh every 5 min
+  </footer>
+
+  <script src="mlb.js"></script>
+  <script src="nerd.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
