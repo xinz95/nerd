@@ -57,6 +57,8 @@ function renderCard(game) {
     used_fip_fallback: ['', 'FIP used'],
     no_velocity_data:  ['', 'no velo data'],
     insufficient_data: ['', 'limited data'],
+    prior_year_stats:  ['', '2025 stats'],
+    blended_stats:     ['', 'blended stats'],
   };
   const seen = new Set();
   const flagsHtml = (game.flags || [])
@@ -151,10 +153,27 @@ async function loadGames(date) {
       return;
     }
 
-    // Estimate min_ip dynamically
+    // Estimate how far into the season we are
     const gpVals = Object.values(standings).map(s => s.gamesPlayed).filter(g => g > 0);
     const avgGp = gpVals.length ? gpVals.reduce((a, b) => a + b, 0) / gpVals.length : 1;
     const minIp = Math.max(3, avgGp);
+
+    // Blend with prior year stats for first 30 games of the season
+    let effectiveSeasonStats = seasonStats;
+    let effectiveSaberStats  = saberStats;
+    let blendFlags            = {};
+
+    if (avgGp < 30) {
+      setStatus('Fetching prior season stats for blending…');
+      const [priorSeason, priorSaber] = await Promise.all([
+        getPitcherSeasonStats(season - 1),
+        getPitcherSabermetrics(season - 1),
+      ]);
+      const blended = blendPitcherStats(seasonStats, saberStats, priorSeason, priorSaber);
+      effectiveSeasonStats = blended.blendedSeason;
+      effectiveSaberStats  = blended.blendedSaber;
+      blendFlags            = blended.blendFlags;
+    }
 
     setStatus(`Fetching pitcher velocity data… (this may take a moment on first load)`);
 
@@ -162,10 +181,30 @@ async function loadGames(date) {
     const pitcherIds = [...new Set(
       schedule.flatMap(g => [g.homePitcherId, g.awayPitcherId]).filter(Boolean)
     )];
-    const velocities = await getPitcherVelocitiesParallel(pitcherIds, season);
+    let velocities = await getPitcherVelocitiesParallel(pitcherIds, season);
+
+    // For pitchers with no current-year velocity, fall back to prior year
+    if (avgGp < 30) {
+      const missingVelIds = pitcherIds.filter(pid => velocities[pid] == null);
+      if (missingVelIds.length > 0) {
+        const priorVelocities = await getPitcherVelocitiesParallel(missingVelIds, season - 1);
+        velocities = { ...velocities };
+        for (const pid of missingVelIds) {
+          if (priorVelocities[pid] != null) velocities[pid] = priorVelocities[pid];
+        }
+      }
+    }
 
     setStatus('Computing scores…');
-    const { pnerds, flags } = computeAllPnerds(seasonStats, saberStats, velocities, minIp);
+    const { pnerds, flags: pnerdFlags } = computeAllPnerds(effectiveSeasonStats, effectiveSaberStats, velocities, minIp);
+
+    // Merge blend flags into pnerd flags
+    const flags = { ...pnerdFlags };
+    for (const [pid, bFlag] of Object.entries(blendFlags)) {
+      if (!bFlag) continue;
+      if (!flags[pid]) flags[pid] = [];
+      if (!flags[pid].includes(bFlag)) flags[pid].push(bFlag);
+    }
     const tnerds = computeAllTnerds(standings, hittingSaber);
 
     // Assemble game results

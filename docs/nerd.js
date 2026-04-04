@@ -212,6 +212,106 @@ function computeAllTnerds(standings, hittingSaber, minGames = 3) {
 }
 
 // ---------------------------------------------------------------------------
+// Prior-year stat blending
+// ---------------------------------------------------------------------------
+
+const BLEND_STARTS_THRESHOLD = 5; // full weight on current year once pitcher has 5 starts
+
+/**
+ * Merges prior-year and current-year pitcher stats into blended dicts ready
+ * for computeAllPnerds.
+ *
+ * Rules:
+ *  - weight = min(1, currentStarts / threshold)
+ *  - blended = current * weight + prior * (1 - weight)
+ *  - Pitcher with no current-year data but has prior-year data → 100% prior
+ *  - Pitcher with neither → excluded (falls back to 5.0 in computeAllPnerds)
+ *  - Prior-year team is irrelevant; pNERD is individual, tNERD comes from standings
+ *
+ * Returns { blendedSeason, blendedSaber, blendFlags }
+ *   blendFlags: { playerId: flag_string | null }
+ */
+function blendPitcherStats(
+  currentSeason, currentSaber,
+  priorSeason,   priorSaber,
+  threshold = BLEND_STARTS_THRESHOLD
+) {
+  const blendedSeason = {};
+  const blendedSaber  = {};
+  const blendFlags    = {};
+
+  // Union of all player IDs across both seasons
+  const allPids = new Set([
+    ...Object.keys(currentSeason),
+    ...Object.keys(currentSaber),
+    ...Object.keys(priorSeason),
+    ...Object.keys(priorSaber),
+  ]);
+
+  for (const pid of allPids) {
+    const cur  = currentSeason[pid];
+    const cSab = currentSaber[pid];
+    const pri  = priorSeason[pid];
+    const pSab = priorSaber[pid];
+
+    const hasCurrent = cur != null || cSab != null;
+    const hasPrior   = pri != null || pSab != null;
+
+    if (!hasCurrent && !hasPrior) continue; // debut with no data at all → skip
+
+    if (!hasPrior) {
+      // Current season only (no prior MLB record — debut player)
+      blendedSeason[pid] = cur || {};
+      blendedSaber[pid]  = cSab || {};
+      blendFlags[pid]    = null;
+      continue;
+    }
+
+    const currentStarts = cur?.gamesStarted ?? 0;
+    const w = Math.min(1, currentStarts / threshold); // current-year weight
+
+    if (w >= 1) {
+      // Enough current data — no blending needed
+      blendedSeason[pid] = cur || {};
+      blendedSaber[pid]  = cSab || {};
+      blendFlags[pid]    = null;
+      continue;
+    }
+
+    // Blend numeric fields
+    const blendStat = (cVal, pVal) => {
+      if (cVal == null && pVal == null) return null;
+      if (cVal == null) return pVal;
+      if (pVal == null) return cVal;
+      return cVal * w + pVal * (1 - w);
+    };
+
+    blendedSeason[pid] = {
+      era:          blendStat(cur?.era,          pri?.era),
+      whip:         blendStat(cur?.whip,         pri?.whip),
+      k9:           blendStat(cur?.k9,           pri?.k9),
+      bb9:          blendStat(cur?.bb9,          pri?.bb9),
+      hr9:          blendStat(cur?.hr9,          pri?.hr9),
+      // Use current-year IP for qualifying threshold; add prior as context
+      ip:           (cur?.ip ?? 0) + (pri?.ip ?? 0) * (1 - w),
+      gamesStarted: cur?.gamesStarted ?? 0,
+      teamId:       cur?.teamId ?? null, // always use current team
+    };
+
+    blendedSaber[pid] = {
+      fip:      blendStat(cSab?.fip,      pSab?.fip),
+      xfip:     blendStat(cSab?.xfip,     pSab?.xfip),
+      fipMinus: blendStat(cSab?.fipMinus, pSab?.fipMinus),
+      war:      blendStat(cSab?.war,      pSab?.war),
+    };
+
+    blendFlags[pid] = w === 0 ? 'prior_year_stats' : 'blended_stats';
+  }
+
+  return { blendedSeason, blendedSaber, blendFlags };
+}
+
+// ---------------------------------------------------------------------------
 // Game NERD
 // ---------------------------------------------------------------------------
 
