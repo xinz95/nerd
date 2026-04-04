@@ -70,12 +70,17 @@ async function loadTeams() {
   const season  = parseInt(today.slice(0, 4));
   const endDate = shiftDate(today, -1);
 
+  // Use prior year stats for all March/April games (small sample size)
+  const todayMonth    = parseInt(today.slice(5, 7));
+  const isEarlySeason = todayMonth <= 4;
+  const statsYear     = isEarlySeason ? season - 1 : season;
+
   try {
     setStatus('Loading team stats…');
 
     const [standings, hittingSaber] = await Promise.all([
-      getStandings(season, endDate),
-      getHittingSabermetrics(season, endDate),
+      getStandings(statsYear, isEarlySeason ? null : endDate),
+      getHittingSabermetrics(statsYear, isEarlySeason ? null : endDate),
     ]);
 
     setStatus('Computing scores…');

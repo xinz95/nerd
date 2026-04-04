@@ -166,14 +166,21 @@ async function loadGames(date) {
     let effectiveSaberStats  = saberStats;
     let blendFlags            = {};
 
+    let effectiveHittingSaber = hittingSaber;
+    let effectiveStandings    = standings;
+
     if (isEarlySeason) {
       setStatus('Fetching prior season stats (March/April)…');
-      const [priorSeason, priorSaber] = await Promise.all([
+      const [priorSeason, priorSaber, priorHitting, priorStandings] = await Promise.all([
         getPitcherSeasonStats(season - 1),
         getPitcherSabermetrics(season - 1),
+        getHittingSabermetrics(season - 1),
+        getStandings(season - 1),
       ]);
-      effectiveSeasonStats = priorSeason;
-      effectiveSaberStats  = priorSaber;
+      effectiveSeasonStats   = priorSeason;
+      effectiveSaberStats    = priorSaber;
+      effectiveHittingSaber  = priorHitting;
+      effectiveStandings     = priorStandings;
       const allPriorPids = new Set([...Object.keys(priorSeason), ...Object.keys(priorSaber)]);
       for (const pid of allPriorPids) blendFlags[pid] = 'prior_year_stats';
     }
@@ -198,7 +205,7 @@ async function loadGames(date) {
       if (!flags[pid]) flags[pid] = [];
       if (!flags[pid].includes(bFlag)) flags[pid].push(bFlag);
     }
-    const { tnerds } = computeAllTnerds(standings, hittingSaber);
+    const { tnerds } = computeAllTnerds(effectiveStandings, effectiveHittingSaber);
 
     // Assemble game results
     const results = schedule.map(g => {
