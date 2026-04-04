@@ -32,6 +32,7 @@
   margin: 0 auto 3rem;
   padding: 0 1.5rem;
   overflow-x: auto;
+  overflow-y: clip; /* prevents overflow-x from creating a vertical scroll container, which would break position:sticky on thead */
 }
 
 /* ------------------------------------------------------------------ */
