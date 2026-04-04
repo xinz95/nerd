@@ -140,13 +140,17 @@ async function loadGames(date) {
 
   try {
     setStatus('Fetching schedule…');
-    const [schedule, seasonStats, saberStats, hittingSaber, standings] = await Promise.all([
+    const [schedule, seasonStats, saberStats, hittingSaber, standings, hittingPA] = await Promise.all([
       getSchedule(date),
       getPitcherSeasonStats(season, endDate),
       getPitcherSabermetrics(season, endDate),
       getHittingSabermetrics(season, endDate),
       getStandings(season, endDate),
+      getHittingSeasonStats(season, endDate),
     ]);
+    for (const [pid, pa] of Object.entries(hittingPA)) {
+      if (hittingSaber[pid]) hittingSaber[pid].pa = pa;
+    }
 
     if (!schedule.length) {
       document.getElementById('loading').classList.add('hidden');
@@ -171,12 +175,16 @@ async function loadGames(date) {
 
     if (isEarlySeason) {
       setStatus('Fetching prior season stats (March/April)…');
-      const [priorSeason, priorSaber, priorHitting, priorStandings] = await Promise.all([
+      const [priorSeason, priorSaber, priorHitting, priorStandings, priorHittingPA] = await Promise.all([
         getPitcherSeasonStats(season - 1),
         getPitcherSabermetrics(season - 1),
         getHittingSabermetrics(season - 1),
         getStandings(season - 1),
+        getHittingSeasonStats(season - 1),
       ]);
+      for (const [pid, pa] of Object.entries(priorHittingPA)) {
+        if (priorHitting[pid]) priorHitting[pid].pa = pa;
+      }
       effectiveSeasonStats   = priorSeason;
       effectiveSaberStats    = priorSaber;
       effectiveHittingSaber  = priorHitting;

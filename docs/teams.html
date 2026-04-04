@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Team NERD List — Baseball Watchability</title>
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="teams.css" />
 </head>
@@ -14,6 +15,7 @@
         <span class="brand-nerd">NERD</span>
         <span class="brand-sub">Baseball Watchability</span>
       </div>
+      <button id="theme-btn" class="theme-btn" aria-label="Toggle light/dark mode">☀</button>
     </div>
   </header>
 
@@ -39,6 +41,7 @@
     <table class="teams-table">
       <thead>
         <tr>
+          <th class="col-team-logo"></th>
           <th class="sortable col-team-name" data-col="name">Team</th>
           <th class="col-abbr">Abbr</th>
           <th class="sortable num" data-col="w" title="Wins">W</th>
@@ -63,8 +66,8 @@
     Data: <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>
   </footer>
 
-  <script src="mlb.js?v=3"></script>
-  <script src="nerd.js?v=3"></script>
-  <script src="teams.js?v=3"></script>
+  <script src="mlb.js?v=6"></script>
+  <script src="nerd.js?v=5"></script>
+  <script src="teams.js?v=4"></script>
 </body>
 </html>

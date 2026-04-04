@@ -32,7 +32,8 @@
   margin: 0 auto 3rem;
   padding: 0 1.5rem;
   overflow-x: auto;
-  overflow-y: clip; /* prevents overflow-x from creating a vertical scroll container, which would break position:sticky on thead */
+  overflow-y: auto;
+  max-height: calc(100vh - 155px); /* makes wrapper the scroll container so thead top:0 sticks correctly */
 }
 
 /* ------------------------------------------------------------------ */
@@ -47,8 +48,12 @@
 
 .teams-table thead {
   position: sticky;
-  top: 61px;
+  top: 0;
   z-index: 5;
+}
+
+.teams-table tbody tr:first-child td {
+  padding-top: 1rem;
 }
 
 .teams-table th {
@@ -79,6 +84,18 @@
 }
 
 .teams-table tbody tr:hover td { background: var(--surface); }
+
+.col-team-logo {
+  width: 36px;
+  padding: 0.2rem 0.25rem 0.2rem 0.75rem;
+}
+
+.team-logo-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+}
 
 .col-team-name {
   font-weight: 500;

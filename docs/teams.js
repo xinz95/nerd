@@ -78,10 +78,16 @@ async function loadTeams() {
   try {
     setStatus('Loading team stats…');
 
-    const [standings, hittingSaber] = await Promise.all([
+    const [standings, hittingSaber, hittingPA] = await Promise.all([
       getStandings(statsYear, isEarlySeason ? null : endDate),
       getHittingSabermetrics(statsYear, isEarlySeason ? null : endDate),
+      getHittingSeasonStats(statsYear, isEarlySeason ? null : endDate),
     ]);
+    // Merge plate appearances into sabermetrics objects so computeAllTnerds
+    // can weight wRC+ by PA rather than treating every batter equally.
+    for (const [pid, pa] of Object.entries(hittingPA)) {
+      if (hittingSaber[pid]) hittingSaber[pid].pa = pa;
+    }
 
     setStatus('Computing scores…');
     const { tnerds, components } = computeAllTnerds(standings, hittingSaber);
@@ -192,9 +198,16 @@ function rowHtml(r) {
     ? ' <span style="color:var(--text-muted);font-size:0.75em">(insufficient data)</span>'
     : '';
 
+  const teamUrl  = mlbTeamUrl(r.tid);
+  const nameLink = teamUrl
+    ? `<a href="${teamUrl}" target="_blank" rel="noopener">${r.name}</a>`
+    : r.name;
+  const logoUrl  = mlbTeamLogoUrl(r.tid);
+
   return `
     <tr>
-      <td class="col-team-name">${r.name}${insufficientNote}</td>
+      <td class="col-team-logo"><img class="team-logo-img" src="${logoUrl}" alt="${r.abbr}" loading="lazy" onerror="this.style.display='none'"></td>
+      <td class="col-team-name">${nameLink}${insufficientNote}</td>
       <td class="col-abbr">${r.abbr}</td>
       <td class="num record-cell">${r.w}</td>
       <td class="num record-cell">${r.l}</td>

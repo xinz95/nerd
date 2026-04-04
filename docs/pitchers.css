@@ -65,7 +65,8 @@
   margin: 0 auto 3rem;
   padding: 0 1.5rem;
   overflow-x: auto;
-  overflow-y: clip; /* prevents overflow-x from creating a vertical scroll container, which would break position:sticky on thead */
+  overflow-y: auto;
+  max-height: calc(100vh - 170px); /* makes wrapper the scroll container so thead top:0 sticks correctly */
 }
 
 /* ------------------------------------------------------------------ */
@@ -80,8 +81,12 @@
 
 .pitchers-table thead {
   position: sticky;
-  top: 61px; /* height of site header */
+  top: 0;
   z-index: 5;
+}
+
+.pitchers-table tbody tr:first-child td {
+  padding-top: 1rem;
 }
 
 .pitchers-table th {
@@ -243,7 +248,8 @@ sup { font-size: 0.65em; color: var(--text-muted); }
 /* ------------------------------------------------------------------ */
 @media (max-width: 900px) {
   .pitchers-table .col-ivb,
-  .pitchers-table .col-abhb { display: none; }
+  .pitchers-table .col-abhb,
+  .pitchers-table .col-spineff { display: none; }
 }
 
 @media (max-width: 680px) {

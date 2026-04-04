@@ -135,6 +135,7 @@ p.intro {
   border: 1px solid var(--border);
   font-family: "SF Mono", "Fira Code", monospace;
 }
+[data-theme="light"] .inline-flag { background: rgba(0,0,0,0.04); }
 
 /* Code */
 .method-page code {

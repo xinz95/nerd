@@ -90,7 +90,7 @@ async function loadPitchers() {
     // Fetch season data + next 5 days of schedules concurrently
     // Use yesterday as the stat cutoff so today's games don't affect scores.
     const endDate   = shiftDate(today, -1);
-    const nextDates = [0, 1, 2, 3, 4].map(d => shiftDate(today, d));
+    const nextDates = [0,1,2,3,4,5,6,7,8,9,10,11,12,13].map(d => shiftDate(today, d));
     const [seasonStats, saberStats, standings, ...upcomingSchedules] = await Promise.all([
       getPitcherSeasonStats(season, endDate),
       getPitcherSabermetrics(season, endDate),
@@ -151,26 +151,27 @@ async function loadPitchers() {
 
     // Build player name map: prior-year stats first, then current-year stats
     // (for team accuracy), then upcoming schedule (most authoritative for current team)
-    const playerNames = {}; // { pid: { name, teamAbbr } }
+    const playerNames = {}; // { pid: { name, teamAbbr, teamId } }
     for (const [pid, s] of Object.entries(effectiveSeasonStats)) {
-      if (s.name) playerNames[pid] = { name: s.name, teamAbbr: s.teamAbbr || '—' };
+      if (s.name) playerNames[pid] = { name: s.name, teamAbbr: s.teamAbbr || '—', teamId: s.teamId || null };
     }
     // Override team with current-year data — covers players who changed teams since last year
     for (const [pid, s] of Object.entries(seasonStats)) {
       if (s.teamAbbr) {
         if (playerNames[pid]) {
           playerNames[pid].teamAbbr = s.teamAbbr;
+          if (s.teamId) playerNames[pid].teamId = s.teamId;
         } else if (s.name) {
-          playerNames[pid] = { name: s.name, teamAbbr: s.teamAbbr };
+          playerNames[pid] = { name: s.name, teamAbbr: s.teamAbbr, teamId: s.teamId || null };
         }
       }
     }
     for (const schedule of upcomingSchedules) {
       for (const g of schedule) {
-        if (g.homePitcherId && g.homePitcherName !== 'TBD')
-          playerNames[g.homePitcherId] = { name: g.homePitcherName, teamAbbr: g.homeTeamAbbr };
-        if (g.awayPitcherId && g.awayPitcherName !== 'TBD')
-          playerNames[g.awayPitcherId] = { name: g.awayPitcherName, teamAbbr: g.awayTeamAbbr };
+        if (g.homePitcherId && g.homePitcherName !== 'TBD' && g.homeTeamAbbr)
+          playerNames[g.homePitcherId] = { name: g.homePitcherName, teamAbbr: g.homeTeamAbbr, teamId: g.homeTeamId || null };
+        if (g.awayPitcherId && g.awayPitcherName !== 'TBD' && g.awayTeamAbbr)
+          playerNames[g.awayPitcherId] = { name: g.awayPitcherName, teamAbbr: g.awayTeamAbbr, teamId: g.awayTeamId || null };
       }
     }
 
@@ -185,6 +186,7 @@ async function loadPitchers() {
           pid,
           name:        pn.name,
           teamAbbr:    pn.teamAbbr,
+          teamId:      pn.teamId,
           gs:          s.gamesStarted || 0,
           ip:          comp?.ip     ?? s.ip ?? 0,
           xfip:        comp?.xfip   ?? null,
@@ -194,6 +196,7 @@ async function loadPitchers() {
           velocity:    comp?.velocity ?? null, // already null when noPitchData
           ivb:         comp?.ivb      ?? null,
           absHb:       comp?.absHb    ?? null,
+          spinEff:     comp?.spinEff  ?? null,
           noPitchData: comp?.noPitchData ?? true,
           pnerd:       pnerds[pid] ?? 5.0,
           flagList:    flags[pid] || [],
@@ -202,9 +205,10 @@ async function loadPitchers() {
           zXfip:  comp?.zXfip  ?? null,
           zKPct:  comp?.zKPct  ?? null,
           zBbPct: comp?.zBbPct ?? null,
-          zVel:   comp?.zVel   ?? null,
-          zIvb:   comp?.zIvb   ?? null,
-          zAbsHb: comp?.zAbsHb ?? null,
+          zVel:     comp?.zVel     ?? null,
+          zIvb:     comp?.zIvb     ?? null,
+          zAbsHb:   comp?.zAbsHb   ?? null,
+          zSpinEff: comp?.zSpinEff ?? null,
         };
       });
 
@@ -237,6 +241,7 @@ const SORT_FNS = {
   velocity: r => r.velocity,
   ivb:      r => r.ivb,
   abhb:     r => r.absHb,
+  spineff:  r => r.spinEff,
   pnerd:    r => r.pnerd,
 };
 
@@ -294,6 +299,10 @@ function rowHtml(r) {
     ? `<span style="${zStyle(r.zAbsHb)}">${r.absHb.toFixed(1)}</span>`
     : na;
 
+  const spinEffStr = r.spinEff != null
+    ? `<span style="${zStyle(r.zSpinEff)}">${r.spinEff.toFixed(1)}</span>`
+    : na;
+
   const upcomingBadge = r.upcoming
     ? `<span class="upcoming-badge">${formatShortDate(r.upcoming)}</span>`
     : '';
@@ -304,11 +313,17 @@ function rowHtml(r) {
 
   const headshotUrl = `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_67,q_auto:best/v1/people/${r.pid}/headshot/67/current`;
 
+  const playerUrl = mlbPlayerUrl(r.name, r.pid);
+  const teamUrl   = mlbTeamUrl(r.teamId);
+  const teamCell  = teamUrl
+    ? `<a href="${teamUrl}" target="_blank" rel="noopener">${r.teamAbbr}</a>`
+    : r.teamAbbr;
+
   return `
     <tr>
-      <td class="col-headshot"><img class="headshot-img" src="${headshotUrl}" alt="${r.name}" loading="lazy"></td>
-      <td class="col-name">${r.name}${upcomingDot}</td>
-      <td class="col-team">${r.teamAbbr}</td>
+      <td class="col-headshot"><a href="${playerUrl}" target="_blank" rel="noopener"><img class="headshot-img" src="${headshotUrl}" alt="${r.name}" loading="lazy"></a></td>
+      <td class="col-name"><a href="${playerUrl}" target="_blank" rel="noopener">${r.name}</a>${upcomingDot}</td>
+      <td class="col-team">${teamCell}</td>
       <td class="num col-gs">${r.gs}</td>
       <td class="num col-ip">${r.ip.toFixed(1)}</td>
       <td class="num">${xfipStr}</td>
@@ -317,6 +332,7 @@ function rowHtml(r) {
       <td class="num col-velo">${veloStr}</td>
       <td class="num col-ivb">${ivbStr}</td>
       <td class="num col-abhb">${abhbStr}</td>
+      <td class="num col-spineff">${spinEffStr}</td>
       <td class="num pnerd-cell"><span style="color:${color};font-weight:700">${r.pnerd.toFixed(1)}</span></td>
       <td>${upcomingBadge}</td>
     </tr>`;

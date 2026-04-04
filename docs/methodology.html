@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Methodology — NERD Baseball Watchability</title>
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="methodology.css" />
 </head>
@@ -16,6 +17,7 @@
           <span class="brand-sub">Baseball Watchability</span>
         </a>
       </div>
+      <button id="theme-btn" class="theme-btn" aria-label="Toggle light/dark mode">☀</button>
     </div>
   </header>
 
@@ -103,9 +105,10 @@
               A composite of three pitch-level components derived from play-by-play data for the pitcher's last 5 starts.
               Each sub-component is z-scored at the league level before combining:
               <ul style="margin-top:0.4rem">
-                <li><strong>Velocity</strong> (45%) — avg fastball speed (mph)</li>
-                <li><strong>Induced vertical break</strong> (35%) — avg "rise" on the fastball (inches). Measures how much the ball rises above a spinless trajectory — a proxy for backspin quality and carry.</li>
-                <li><strong>Absolute horizontal break</strong> (20%) — avg lateral movement (inches, sign-agnostic). More arm-side run or cut generally means harder to square up.</li>
+                <li><strong>Velocity</strong> (35%) — avg fastball speed (mph)</li>
+                <li><strong>Induced vertical break</strong> (30%) — avg "rise" on the fastball (inches). Measures how much the ball rises above a spinless trajectory — a proxy for backspin quality and carry.</li>
+                <li><strong>Absolute horizontal break</strong> (15%) — avg lateral movement (inches, sign-agnostic). More arm-side run or cut generally means harder to square up.</li>
+                <li><strong>Spin Efficiency</strong> (20%) — total induced break (inches) per 1,000 RPM. Captures how much of the pitcher's spin translates into actual movement rather than being wasted as gyro (dead) spin.</li>
               </ul>
               Fastball family: 4-seam (FF), 2-seam (FT), sinker (SI), cutter (FC).
             </td>
@@ -115,7 +118,7 @@
 
       <div class="formula-block">
         <div class="formula">
-          z<sub>PQ</sub> = z(velocity) &times; 0.45 + z(IVB) &times; 0.35 + z(|HB|) &times; 0.20
+          z<sub>PQ</sub> = z(velocity) &times; 0.35 + z(IVB) &times; 0.30 + z(|HB|) &times; 0.15 + z(SpEff) &times; 0.20
         </div>
         <div class="formula">
           composite<sub>z</sub> =
@@ -125,11 +128,11 @@
           + z<sub>PQ</sub> &times; 0.25
         </div>
         <div class="formula">
-          pNERD = 5 + clamp(composite<sub>z</sub>, &minus;3, 3) / 3 &times; 5
+          pNERD = 5 + clamp(composite<sub>z</sub>, &minus;2, 2) / 2 &times; 5
         </div>
         <p class="formula-note">
           All z-scores are computed over all pitchers meeting the innings threshold (see Qualifying Thresholds).
-          Clamping at ±3 standard deviations prevents extreme outliers from compressing everyone else.
+          Clamping at ±2 standard deviations prevents extreme outliers from compressing everyone else.
         </p>
       </div>
 
@@ -197,10 +200,10 @@
           &minus; z(|RD/G|) &times; 0.15
         </div>
         <div class="formula">
-          tNERD = 5 + clamp(composite<sub>z</sub>, &minus;3, 3) / 3 &times; 5
+          tNERD = 5 + clamp(composite<sub>z</sub>, &minus;2, 2) / 2 &times; 5
         </div>
         <p class="formula-note">
-          wRC+ is computed as the median wRC+ across all qualified batters on the team (minimum 10 games).
+          wRC+ is computed as the PA-weighted mean across all batters on the team (minimum 10 PA).
           Proxy ERA and run differential come directly from current standings.
         </p>
       </div>

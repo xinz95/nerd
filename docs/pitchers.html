@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pitcher NERD List — Baseball Watchability</title>
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="pitchers.css" />
 </head>
@@ -14,6 +15,7 @@
         <span class="brand-nerd">NERD</span>
         <span class="brand-sub">Baseball Watchability</span>
       </div>
+      <button id="theme-btn" class="theme-btn" aria-label="Toggle light/dark mode">☀</button>
     </div>
   </header>
 
@@ -45,7 +47,7 @@
         <tr>
           <th class="th-group" colspan="5"></th>
           <th class="th-group" colspan="3">Season Stats</th>
-          <th class="th-group col-velo col-ivb col-abhb" colspan="3">Pitch Quality (last 5 starts)</th>
+          <th class="th-group col-velo col-ivb col-abhb col-spineff" colspan="4">Pitch Quality (last 5 starts)</th>
           <th class="th-group" colspan="2"></th>
         </tr>
         <tr>
@@ -60,6 +62,7 @@
           <th class="sortable num col-velo" data-col="velocity" title="Average fastball velocity (mph)">Velo</th>
           <th class="sortable num col-ivb" data-col="ivb" title="Induced vertical break (inches) — higher = more rise">IVB</th>
           <th class="sortable num col-abhb" data-col="abhb" title="Absolute horizontal break (inches)">|HB|</th>
+          <th class="sortable num col-spineff" data-col="spineff" title="Spin efficiency proxy: total induced break (in) per 1,000 RPM. Higher = more of the pitcher's spin translates to movement rather than gyro (dead) spin.">SpEff</th>
           <th class="sortable num" data-col="pnerd" title="Pitcher NERD score (0–10)">pNERD</th>
           <th>Next Start</th>
         </tr>
@@ -78,8 +81,8 @@
     Data: <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>
   </footer>
 
-  <script src="mlb.js?v=3"></script>
-  <script src="nerd.js?v=3"></script>
-  <script src="pitchers.js?v=4"></script>
+  <script src="mlb.js?v=6"></script>
+  <script src="nerd.js?v=5"></script>
+  <script src="pitchers.js?v=7"></script>
 </body>
 </html>

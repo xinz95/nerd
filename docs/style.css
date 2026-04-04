@@ -19,6 +19,19 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Light mode token overrides                                           */
+/* ------------------------------------------------------------------ */
+[data-theme="light"] {
+  --bg:         #f4f6fb;
+  --surface:    #ffffff;
+  --surface-2:  #eef0f8;
+  --border:     #d8dce9;
+  --text:       #1e2130;
+  --text-muted: #6b7490;
+  --accent:     #2b72ef;
+}
+
+/* ------------------------------------------------------------------ */
 /* Reset / base                                                         */
 /* ------------------------------------------------------------------ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -320,6 +333,32 @@ main {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Theme toggle button                                                  */
+/* ------------------------------------------------------------------ */
+.theme-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.theme-btn:hover { background: var(--border); color: var(--text); }
+
+/* Light-mode overrides for hard-coded rgba whites */
+[data-theme="light"] .score-bar-track       { background: rgba(0,0,0,0.08); }
+[data-theme="light"] .pnerd-badge           { background: rgba(0,0,0,0.05); }
+[data-theme="light"] .flag                  { background: rgba(0,0,0,0.04); }
+[data-theme="light"] .card:hover            { box-shadow: 0 6px 24px rgba(0,0,0,0.12); }
 
 /* ------------------------------------------------------------------ */
 /* Tab nav                                                              */

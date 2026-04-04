@@ -3,6 +3,35 @@
 const MLB_BASE = 'https://statsapi.mlb.com/api/v1';
 const FASTBALL_CODES = new Set(['FF', 'FT', 'SI', 'FC']);
 
+// MLB.com URL slugs keyed by team ID
+const TEAM_SLUGS = {
+  108: 'angels',      109: 'dbacks',     110: 'orioles',
+  111: 'red-sox',     112: 'cubs',       113: 'reds',
+  114: 'guardians',   115: 'rockies',    116: 'tigers',
+  117: 'astros',      118: 'royals',     119: 'dodgers',
+  120: 'nationals',   121: 'mets',       133: 'athletics',
+  134: 'pirates',     135: 'padres',     136: 'mariners',
+  137: 'giants',      138: 'cardinals',  139: 'rays',
+  140: 'rangers',     141: 'blue-jays',  142: 'twins',
+  143: 'phillies',    144: 'braves',     145: 'white-sox',
+  146: 'marlins',     147: 'yankees',    158: 'brewers',
+};
+
+function mlbPlayerUrl(name, playerId) {
+  const slug = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `https://www.mlb.com/player/${slug}-${playerId}`;
+}
+
+function mlbTeamUrl(teamId) {
+  const slug = TEAM_SLUGS[teamId];
+  return slug ? `https://www.mlb.com/${slug}` : null;
+}
+
+function mlbTeamLogoUrl(teamId) {
+  return `https://www.mlb.com/assets/images/team/logos/${teamId}_primary_on_dark.svg`;
+}
+
 // ---------------------------------------------------------------------------
 // localStorage cache with TTL
 // ---------------------------------------------------------------------------
@@ -169,7 +198,7 @@ async function getPitcherSabermetrics(season, endDate = null) {
 }
 
 async function getHittingSabermetrics(season, endDate = null) {
-  const key    = `hitting_saber_all_v2_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const key    = `hitting_saber_all_${season}${endDate ? `_thru_${endDate}` : ''}`;
   const params = { stats: 'sabermetrics', group: 'hitting', season, sportId: 1, limit: 2000, playerPool: 'All' };
   if (endDate) params.endDate = endDate;
   const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
@@ -184,8 +213,25 @@ async function getHittingSabermetrics(season, endDate = null) {
       woba: parseFloat(s.woba) || null,
       war: parseFloat(s.war) || null,
       teamId: split.team?.id || null,
-      pa: parseInt(s.plateAppearances) || 0,
+      pa: 0, // filled in by getHittingSeasonStats
     };
+  }
+  return result;
+}
+
+// Returns { playerId: plateAppearances } from the season hitting stats endpoint,
+// which reliably includes plateAppearances unlike the sabermetrics endpoint.
+async function getHittingSeasonStats(season, endDate = null) {
+  const key    = `hitting_season_pa_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const params = { stats: 'season', group: 'hitting', season, sportId: 1, limit: 2000, playerPool: 'All', gameType: 'R' };
+  if (endDate) params.endDate = endDate;
+  const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
+
+  const result = {};
+  for (const split of raw.stats?.[0]?.splits || []) {
+    const pid = split.player?.id;
+    if (!pid) continue;
+    result[pid] = parseInt(split.stat?.plateAppearances) || 0;
   }
   return result;
 }
@@ -266,7 +312,7 @@ async function getPitcherPitchData(playerId, season, nGames = 5, beforeDate = nu
   const recentPks = gamePks.slice(0, nGames);
   const pbpResults = await Promise.allSettled(recentPks.map(gp => getPlayByPlay(gp)));
 
-  const speeds = [], ivbs = [], hbs = [];
+  const speeds = [], ivbs = [], hbs = [], spinRates = [];
 
   for (const result of pbpResults) {
     if (result.status !== 'fulfilled') continue;
@@ -280,12 +326,13 @@ async function getPitcherPitchData(playerId, season, nGames = 5, beforeDate = nu
         if (pd.startSpeed)             speeds.push(parseFloat(pd.startSpeed));
         if (pd.breaks?.breakVerticalInduced != null) ivbs.push(parseFloat(pd.breaks.breakVerticalInduced));
         if (pd.breaks?.breakHorizontal != null)      hbs.push(Math.abs(parseFloat(pd.breaks.breakHorizontal)));
+        if (pd.breaks?.spinRate != null)             spinRates.push(parseFloat(pd.breaks.spinRate));
       }
     }
   }
 
   const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
-  const data = { velocity: avg(speeds), ivb: avg(ivbs), absHb: avg(hbs) };
+  const data = { velocity: avg(speeds), ivb: avg(ivbs), absHb: avg(hbs), spinRate: avg(spinRates) };
   lsSet(cacheKey, data);
   return data;
 }

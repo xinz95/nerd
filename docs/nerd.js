@@ -41,8 +41,8 @@ function pythagoreanWinPct(rs, ra, exp = 1.83) {
 // Pitcher NERD
 // ---------------------------------------------------------------------------
 
-// Pitch quality sub-component weights (velocity + movement, sum to 1)
-const PITCH_QUALITY_WEIGHTS = { velocity: 0.45, ivb: 0.35, absHb: 0.20 };
+// Pitch quality sub-component weights (velocity + movement + spin efficiency, sum to 1)
+const PITCH_QUALITY_WEIGHTS = { velocity: 0.35, ivb: 0.30, absHb: 0.15, spinEff: 0.20 };
 
 // pNERD top-level weights (sum to 1)
 const PNERD_WEIGHTS = { xfip: 0.30, kPct: 0.25, bbPct: 0.20, pitchQuality: 0.25 };
@@ -60,33 +60,57 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
 
   // League-level fallbacks for missing pitch sub-components
   const allPd = Object.values(pitchDataMap).filter(Boolean);
-  const leagueMedVel  = median(allPd.map(d => d.velocity).filter(v => v != null)) || 93.0;
-  const leagueMedIvb  = median(allPd.map(d => d.ivb).filter(v => v != null))      || 8.0;
-  const leagueMedAbsHb = median(allPd.map(d => d.absHb).filter(v => v != null))   || 8.0;
+  const leagueMedVel    = median(allPd.map(d => d.velocity).filter(v => v != null))  || 93.0;
+  const leagueMedIvb    = median(allPd.map(d => d.ivb).filter(v => v != null))       || 8.0;
+  const leagueMedAbsHb  = median(allPd.map(d => d.absHb).filter(v => v != null))     || 8.0;
+  const leagueMedSpin   = median(allPd.map(d => d.spinRate).filter(v => v != null))  || 2300;
 
-  // Build qualifying rows
+  // Spin efficiency: total induced break (in) per 1,000 RPM of spin rate.
+  // Captures how much of a pitcher's spin actually translates to movement
+  // rather than being wasted as gyro (ball-axis) spin.
+  function calcSpinEff(ivb, absHb, spinRate) {
+    if (!spinRate) return null;
+    return Math.sqrt(ivb ** 2 + absHb ** 2) / (spinRate / 1000);
+  }
+
+  const leagueMedSpinEff = median(
+    allPd
+      .map(d => calcSpinEff(d.ivb ?? leagueMedIvb, d.absHb ?? leagueMedAbsHb, d.spinRate ?? leagueMedSpin))
+      .filter(v => v != null)
+  ) || 8.0;
+
+  // Build qualifying rows — driven by seasonStats so a sparse sabermetrics
+  // response never collapses the entire qualifying pool to zero.
   const rows = {};
-  for (const [pid, saber] of Object.entries(saberStats)) {
-    const season = seasonStats[pid] || {};
-    const ip = season.ip || 0;
+  for (const [pid, season] of Object.entries(seasonStats)) {
+    const ip   = season.ip || 0;
     if (ip < minIp) continue;
 
-    const xfip = saber.xfip ?? saber.fip;
     const kPct = season.kPct;
-    if (xfip == null || kPct == null) continue;
+    if (kPct == null) continue;   // must have rate stats
+
+    const saber = saberStats[pid] || {};
+    const xfip  = saber.xfip ?? saber.fip ?? null;  // optional — null → z treated as 0
 
     const pd = pitchDataMap[pid];
+    const vel   = pd?.velocity ?? leagueMedVel;
+    const ivb   = pd?.ivb      ?? leagueMedIvb;
+    const absHb = pd?.absHb    ?? leagueMedAbsHb;
+    const spin  = pd?.spinRate ?? leagueMedSpin;
     rows[pid] = {
       xfip,
-      usedFip:    saber.xfip == null,
+      usedFip:     saber.xfip == null && saber.fip != null,
+      noXfip:      xfip == null,
       kPct,
-      bbPct:      season.bbPct ?? 0.085,
-      velocity:   pd?.velocity ?? leagueMedVel,
-      ivb:        pd?.ivb      ?? leagueMedIvb,
-      absHb:      pd?.absHb    ?? leagueMedAbsHb,
+      bbPct:       season.bbPct ?? 0.085,
+      velocity:    vel,
+      ivb,
+      absHb,
+      spinRate:    spin,
+      spinEff:     calcSpinEff(ivb, absHb, spin) ?? leagueMedSpinEff,
       noPitchData: pd == null || (pd.velocity == null && pd.ivb == null),
       ip,
-      starts: season.gamesStarted || 0,
+      starts:      season.gamesStarted || 0,
     };
   }
 
@@ -101,13 +125,16 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
     return { pnerds, flags, components: {} };
   }
 
-  // Population distributions
-  const xfipMu  = mean(pids.map(p => rows[p].xfip)),     xfipSig   = stdev(pids.map(p => rows[p].xfip));
-  const kPctMu  = mean(pids.map(p => rows[p].kPct)),     kPctSig   = stdev(pids.map(p => rows[p].kPct));
-  const bbPctMu = mean(pids.map(p => rows[p].bbPct)),    bbPctSig  = stdev(pids.map(p => rows[p].bbPct));
-  const velMu   = mean(pids.map(p => rows[p].velocity)), velSig    = stdev(pids.map(p => rows[p].velocity));
-  const ivbMu   = mean(pids.map(p => rows[p].ivb)),      ivbSig    = stdev(pids.map(p => rows[p].ivb));
-  const absHbMu = mean(pids.map(p => rows[p].absHb)),    absHbSig  = stdev(pids.map(p => rows[p].absHb));
+  // Population distributions — filter nulls for xFIP since it's optional
+  const xfipVals   = pids.map(p => rows[p].xfip).filter(v => v != null);
+  const xfipMu     = xfipVals.length ? mean(xfipVals) : 4.0;
+  const xfipSig    = xfipVals.length >= 2 ? stdev(xfipVals) : 1.0;
+  const kPctMu     = mean(pids.map(p => rows[p].kPct)),     kPctSig    = stdev(pids.map(p => rows[p].kPct));
+  const bbPctMu    = mean(pids.map(p => rows[p].bbPct)),    bbPctSig   = stdev(pids.map(p => rows[p].bbPct));
+  const velMu      = mean(pids.map(p => rows[p].velocity)), velSig     = stdev(pids.map(p => rows[p].velocity));
+  const ivbMu      = mean(pids.map(p => rows[p].ivb)),      ivbSig     = stdev(pids.map(p => rows[p].ivb));
+  const absHbMu    = mean(pids.map(p => rows[p].absHb)),    absHbSig   = stdev(pids.map(p => rows[p].absHb));
+  const spinEffMu  = mean(pids.map(p => rows[p].spinEff)),  spinEffSig = stdev(pids.map(p => rows[p].spinEff));
   const lowSamplePop = pids.length < 15;
 
   for (const pid of pids) {
@@ -118,18 +145,20 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
     if (r.starts < 3)  pidFlags.push('low_sample');
     if (lowSamplePop)  pidFlags.push('low_sample');
 
-    const zXfip  = -zscore(r.xfip,  xfipMu,  xfipSig);   // inverted
+    const zXfip  = r.xfip != null ? -zscore(r.xfip, xfipMu, xfipSig) : 0;  // inverted; 0 = neutral when missing
     const zKPct  =  zscore(r.kPct,  kPctMu,  kPctSig);
     const zBbPct = -zscore(r.bbPct, bbPctMu, bbPctSig);   // inverted
 
-    // Pitch quality: three sub-components, each league z-scored
-    const zVel   = zscore(r.velocity, velMu,   velSig);
-    const zIvb   = zscore(r.ivb,      ivbMu,   ivbSig);
-    const zAbsHb = zscore(r.absHb,    absHbMu, absHbSig);
+    // Pitch quality: four sub-components, each league z-scored
+    const zVel     = zscore(r.velocity, velMu,     velSig);
+    const zIvb     = zscore(r.ivb,      ivbMu,     ivbSig);
+    const zAbsHb   = zscore(r.absHb,    absHbMu,   absHbSig);
+    const zSpinEff = zscore(r.spinEff,  spinEffMu, spinEffSig);
     const zPQ =
-      zVel   * PITCH_QUALITY_WEIGHTS.velocity +
-      zIvb   * PITCH_QUALITY_WEIGHTS.ivb +
-      zAbsHb * PITCH_QUALITY_WEIGHTS.absHb;
+      zVel     * PITCH_QUALITY_WEIGHTS.velocity +
+      zIvb     * PITCH_QUALITY_WEIGHTS.ivb +
+      zAbsHb   * PITCH_QUALITY_WEIGHTS.absHb +
+      zSpinEff * PITCH_QUALITY_WEIGHTS.spinEff;
 
     const compositeZ =
       zXfip  * PNERD_WEIGHTS.xfip +
@@ -147,6 +176,7 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
       velocity:  r.noPitchData ? null : r.velocity,
       ivb:       r.noPitchData ? null : r.ivb,
       absHb:     r.noPitchData ? null : r.absHb,
+      spinEff:   r.noPitchData ? null : r.spinEff,
       noPitchData: r.noPitchData,
       ip:        r.ip,
       starts:    r.starts,
@@ -154,9 +184,10 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
       zXfip,
       zKPct,
       zBbPct,
-      zVel:   r.noPitchData ? null : zVel,
-      zIvb:   r.noPitchData ? null : zIvb,
-      zAbsHb: r.noPitchData ? null : zAbsHb,
+      zVel:     r.noPitchData ? null : zVel,
+      zIvb:     r.noPitchData ? null : zIvb,
+      zAbsHb:   r.noPitchData ? null : zAbsHb,
+      zSpinEff: r.noPitchData ? null : zSpinEff,
       zPQ,
     };
   }
