@@ -91,13 +91,14 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
   }
 
   const pids = Object.keys(rows);
-  const pnerds = {};
-  const flags  = {};
+  const pnerds     = {};
+  const flags      = {};
+  const components = {};
 
   if (pids.length === 0) {
     const allPids = new Set([...Object.keys(seasonStats), ...Object.keys(saberStats)]);
     for (const pid of allPids) { pnerds[pid] = 5.0; flags[pid] = ['insufficient_data']; }
-    return { pnerds, flags };
+    return { pnerds, flags, components: {} };
   }
 
   // Population distributions
@@ -138,15 +139,39 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
 
     pnerds[pid] = zToTen(compositeZ);
     flags[pid]  = [...new Set(pidFlags)];
+    components[pid] = {
+      xfip:      r.xfip,
+      usedFip:   r.usedFip,
+      kPct:      r.kPct,
+      bbPct:     r.bbPct,
+      velocity:  r.noPitchData ? null : r.velocity,
+      ivb:       r.noPitchData ? null : r.ivb,
+      absHb:     r.noPitchData ? null : r.absHb,
+      noPitchData: r.noPitchData,
+      ip:        r.ip,
+      starts:    r.starts,
+      // Directional z-scores: positive = good for the pNERD score
+      zXfip,
+      zKPct,
+      zBbPct,
+      zVel:   r.noPitchData ? null : zVel,
+      zIvb:   r.noPitchData ? null : zIvb,
+      zAbsHb: r.noPitchData ? null : zAbsHb,
+      zPQ,
+    };
   }
 
   // Fallback for pitchers not in qualified set
   const allPids = new Set([...Object.keys(seasonStats), ...Object.keys(saberStats)]);
   for (const pid of allPids) {
-    if (!(pid in pnerds)) { pnerds[pid] = 5.0; flags[pid] = ['insufficient_data']; }
+    if (!(pid in pnerds)) {
+      pnerds[pid] = 5.0;
+      flags[pid]  = ['insufficient_data'];
+      components[pid] = null;
+    }
   }
 
-  return { pnerds, flags };
+  return { pnerds, flags, components };
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +337,10 @@ function blendPitcherStats(
       // Use current-year IP for qualifying threshold; add prior as context
       ip:           (cur?.ip ?? 0) + (pri?.ip ?? 0) * (1 - w),
       gamesStarted: cur?.gamesStarted ?? 0,
-      teamId:       cur?.teamId ?? null, // always use current team
+      teamId:       cur?.teamId   ?? null, // always use current team
+      name:         cur?.name     ?? pri?.name     ?? null,
+      teamAbbr:     cur?.teamAbbr ?? pri?.teamAbbr ?? null,
+      teamName:     cur?.teamName ?? pri?.teamName ?? null,
       kPct:  blendStat(cur?.kPct,  pri?.kPct),
       bbPct: blendStat(cur?.bbPct, pri?.bbPct),
     };

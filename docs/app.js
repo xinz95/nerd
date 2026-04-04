@@ -135,16 +135,18 @@ async function loadGames(date) {
   document.getElementById('cards').innerHTML = '';
   document.getElementById('date-display').textContent = formatDisplayDate(date);
 
-  const season = parseInt(date.slice(0, 4));
+  const season  = parseInt(date.slice(0, 4));
+  // Exclude the game day itself so scores reflect pre-game stats only.
+  const endDate = shiftDate(date, -1);
 
   try {
     setStatus('Fetching schedule…');
     const [schedule, seasonStats, saberStats, hittingSaber, standings] = await Promise.all([
       getSchedule(date),
-      getPitcherSeasonStats(season),
-      getPitcherSabermetrics(season),
-      getHittingSabermetrics(season),
-      getStandings(season),
+      getPitcherSeasonStats(season, endDate),
+      getPitcherSabermetrics(season, endDate),
+      getHittingSabermetrics(season, endDate),
+      getStandings(season, endDate),
     ]);
 
     if (!schedule.length) {
@@ -181,7 +183,8 @@ async function loadGames(date) {
     const pitcherIds = [...new Set(
       schedule.flatMap(g => [g.homePitcherId, g.awayPitcherId]).filter(Boolean)
     )];
-    let pitchDataMap = await getPitcherPitchDataParallel(pitcherIds, season);
+    // Exclude today's start so pitch data only covers games before this date.
+    let pitchDataMap = await getPitcherPitchDataParallel(pitcherIds, season, date);
 
     // For pitchers with no current-year pitch data, fall back to prior year
     if (avgGp < 30) {
@@ -256,6 +259,8 @@ function round2(n) {
 
 function bustCacheForDate(date) {
   const season = parseInt(date.slice(0, 4));
+  // Match both bare keys (e.g. nerd__pitcher_season_2026) and date-scoped keys
+  // (e.g. nerd__pitcher_season_2026_thru_YYYY-MM-DD) by using prefix + underscore check.
   const prefixes = [
     `nerd__schedule_${date}`,
     `nerd__pitcher_season_${season}`,
@@ -265,9 +270,8 @@ function bustCacheForDate(date) {
     `nerd__pitcher_season_${season - 1}`,
     `nerd__pitcher_saber_${season - 1}`,
   ];
-  // Also clear pitch data caches for this season (they embed the season in the key)
   for (const k of Object.keys(localStorage)) {
-    if (prefixes.includes(k)) {
+    if (prefixes.some(p => k === p || k.startsWith(p + '_'))) {
       localStorage.removeItem(k);
     } else if (k.startsWith('nerd__pitchdata_') && (k.includes(`_${season}_`) || k.includes(`_${season - 1}_`))) {
       localStorage.removeItem(k);

@@ -116,10 +116,11 @@ function parseGameTimeET(iso) {
   } catch { return 'TBD'; }
 }
 
-async function getPitcherSeasonStats(season) {
-  const raw = await cached(`pitcher_season_${season}`, 3600, () =>
-    mlbFetch('/stats', { stats: 'season', group: 'pitching', season, sportId: 1, gameType: 'R', limit: 2000 })
-  );
+async function getPitcherSeasonStats(season, endDate = null) {
+  const key    = `pitcher_season_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const params = { stats: 'season', group: 'pitching', season, sportId: 1, gameType: 'R', limit: 2000 };
+  if (endDate) params.endDate = endDate;
+  const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
 
   const result = {};
   for (const split of raw.stats?.[0]?.splits || []) {
@@ -138,15 +139,19 @@ async function getPitcherSeasonStats(season) {
       ip: parseFloat(s.inningsPitched) || 0,
       gamesStarted: parseInt(s.gamesStarted) || 0,
       teamId: split.team?.id || null,
+      name:     split.player?.fullName     || null,
+      teamAbbr: split.team?.abbreviation   || null,
+      teamName: split.team?.name           || null,
     };
   }
   return result;
 }
 
-async function getPitcherSabermetrics(season) {
-  const raw = await cached(`pitcher_saber_${season}`, 3600, () =>
-    mlbFetch('/stats', { stats: 'sabermetrics', group: 'pitching', season, sportId: 1, limit: 2000 })
-  );
+async function getPitcherSabermetrics(season, endDate = null) {
+  const key    = `pitcher_saber_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const params = { stats: 'sabermetrics', group: 'pitching', season, sportId: 1, limit: 2000 };
+  if (endDate) params.endDate = endDate;
+  const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
 
   const result = {};
   for (const split of raw.stats?.[0]?.splits || []) {
@@ -163,10 +168,11 @@ async function getPitcherSabermetrics(season) {
   return result;
 }
 
-async function getHittingSabermetrics(season) {
-  const raw = await cached(`hitting_saber_${season}`, 3600, () =>
-    mlbFetch('/stats', { stats: 'sabermetrics', group: 'hitting', season, sportId: 1, limit: 2000 })
-  );
+async function getHittingSabermetrics(season, endDate = null) {
+  const key    = `hitting_saber_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const params = { stats: 'sabermetrics', group: 'hitting', season, sportId: 1, limit: 2000 };
+  if (endDate) params.endDate = endDate;
+  const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
 
   const result = {};
   for (const split of raw.stats?.[0]?.splits || []) {
@@ -183,10 +189,11 @@ async function getHittingSabermetrics(season) {
   return result;
 }
 
-async function getStandings(season) {
-  const raw = await cached(`standings_${season}`, 1800, () =>
-    mlbFetch('/standings', { leagueId: '103,104', season })
-  );
+async function getStandings(season, endDate = null) {
+  const key    = `standings_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const params = { leagueId: '103,104', season };
+  if (endDate) params.date = endDate; // standings endpoint uses 'date' not 'endDate'
+  const raw = await cached(key, 1800, () => mlbFetch('/standings', params));
 
   const result = {};
   for (const division of raw.records || []) {
@@ -207,7 +214,8 @@ async function getStandings(season) {
   return result;
 }
 
-async function getPlayerGameLog(playerId, season) {
+async function getPlayerGameLog(playerId, season, beforeDate = null) {
+  // Always cache the full season game log; date filtering is applied in-memory.
   const raw = await cached(`gamelog_${playerId}_${season}`, 3600, () =>
     mlbFetch(`/people/${playerId}/stats`, { stats: 'gameLog', group: 'pitching', season })
   );
@@ -215,6 +223,8 @@ async function getPlayerGameLog(playerId, season) {
   const gamePks = [];
   for (const group of raw.stats || []) {
     for (const split of group.splits || []) {
+      // Exclude games on or after beforeDate so today's start is never included.
+      if (beforeDate && split.date && split.date >= beforeDate) continue;
       if (parseInt(split.stat?.gamesStarted) >= 1) {
         const gp = split.game?.gamePk;
         if (gp) gamePks.push(parseInt(gp));
@@ -238,12 +248,12 @@ async function getPlayByPlay(gamePk) {
  *   absHb    — avg absolute horizontal break (inches)
  * Any component may be null if insufficient data.
  */
-async function getPitcherPitchData(playerId, season, nGames = 5) {
-  const cacheKey = `pitchdata_${playerId}_${season}_${nGames}`;
+async function getPitcherPitchData(playerId, season, nGames = 5, beforeDate = null) {
+  const cacheKey = `pitchdata_${playerId}_${season}_${nGames}${beforeDate ? `_thru_${beforeDate}` : ''}`;
   const hit = lsGet(cacheKey, 3600);
   if (hit !== null) return hit;
 
-  const gamePks = await getPlayerGameLog(playerId, season);
+  const gamePks = await getPlayerGameLog(playerId, season, beforeDate);
   if (!gamePks.length) {
     const empty = { velocity: null, ivb: null, absHb: null };
     lsSet(cacheKey, empty);
@@ -277,9 +287,9 @@ async function getPitcherPitchData(playerId, season, nGames = 5) {
   return data;
 }
 
-async function getPitcherPitchDataParallel(pitcherIds, season) {
+async function getPitcherPitchDataParallel(pitcherIds, season, beforeDate = null) {
   const results = await Promise.allSettled(
-    pitcherIds.map(pid => getPitcherPitchData(pid, season))
+    pitcherIds.map(pid => getPitcherPitchData(pid, season, 5, beforeDate))
   );
   const map = {};
   pitcherIds.forEach((pid, i) => {

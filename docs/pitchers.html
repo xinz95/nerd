@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pitcher NERD List — Baseball Watchability</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="pitchers.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-nerd">NERD</span>
+        <span class="brand-sub">Baseball Watchability</span>
+      </div>
+      <nav class="header-links">
+        <a href="index.html">← Today's Games</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="pitchers-toolbar">
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="all">All Starters</button>
+      <button class="filter-tab" data-filter="upcoming">Starting in 5 Days</button>
+    </div>
+    <div class="toolbar-summary">
+      <span id="row-count">—</span> &bull; <span id="updated-at">loading…</span>
+    </div>
+  </div>
+
+  <div id="loading-wrap" class="pitchers-loading">Loading pitchers…</div>
+  <div id="error-wrap" class="pitchers-error hidden"><div id="error-msg"></div></div>
+
+  <div class="pitchers-table-wrap hidden" id="table-wrap">
+    <table class="pitchers-table">
+      <thead>
+        <tr>
+          <th class="th-group" colspan="4"></th>
+          <th class="th-group" colspan="3">Season Stats</th>
+          <th class="th-group col-velo col-ivb col-abhb" colspan="3">Pitch Quality (last 5 starts)</th>
+          <th class="th-group" colspan="2"></th>
+        </tr>
+        <tr>
+          <th class="sortable col-name" data-col="name">Pitcher</th>
+          <th class="col-team" data-col="team">Team</th>
+          <th class="sortable num col-gs" data-col="gs" title="Games Started">GS</th>
+          <th class="sortable num col-ip" data-col="ip" title="Innings Pitched">IP</th>
+          <th class="sortable num" data-col="xfip" title="xFIP (lower = better). * = FIP used as fallback">xFIP</th>
+          <th class="sortable num" data-col="kpct" title="Strikeout rate (strikeouts / batters faced)">K%</th>
+          <th class="sortable num" data-col="bbpct" title="Walk rate (walks / batters faced)">BB%</th>
+          <th class="sortable num col-velo" data-col="velocity" title="Average fastball velocity (mph)">Velo</th>
+          <th class="sortable num col-ivb" data-col="ivb" title="Induced vertical break (inches) — higher = more rise">IVB</th>
+          <th class="sortable num col-abhb" data-col="abhb" title="Absolute horizontal break (inches)">|HB|</th>
+          <th class="sortable num" data-col="pnerd" title="Pitcher NERD score (0–10)">pNERD</th>
+          <th>Next Start</th>
+        </tr>
+      </thead>
+      <tbody id="pitcher-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="table-legend hidden" id="table-legend">
+    <span>* xFIP not available — FIP used instead</span>
+    <span>— = insufficient data</span>
+    <span>Stat colors: <span style="color:#4caf74">green = above average</span> &nbsp; <span style="color:#e05252">red = below average</span></span>
+  </div>
+
+  <footer>
+    Data: <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>
+    &nbsp;&bull;&nbsp; <a href="methodology.html">Methodology</a>
+  </footer>
+
+  <script src="mlb.js"></script>
+  <script src="nerd.js"></script>
+  <script src="pitchers.js"></script>
+</body>
+</html>
