@@ -292,8 +292,11 @@ function rowHtml(r) {
     ? ' <span class="upcoming-dot" title="Starting in the next 5 days"></span>'
     : '';
 
+  const headshotUrl = `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_67,q_auto:best/v1/people/${r.pid}/headshot/67/current`;
+
   return `
     <tr>
+      <td class="col-headshot"><img class="headshot-img" src="${headshotUrl}" alt="${r.name}" loading="lazy"></td>
       <td class="col-name">${r.name}${upcomingDot}</td>
       <td class="col-team">${r.teamAbbr}</td>
       <td class="num col-gs">${r.gs}</td>

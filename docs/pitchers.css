@@ -114,6 +114,22 @@
 
 .pitchers-table tbody tr:hover td { background: var(--surface); }
 
+/* Headshot column */
+.col-headshot {
+  width: 44px;
+  padding: 0.2rem 0.4rem 0.2rem 0.75rem;
+}
+
+.headshot-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  background: var(--surface);
+}
+
 /* Name column */
 .col-name {
   font-weight: 500;
