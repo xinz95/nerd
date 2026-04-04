@@ -107,6 +107,12 @@ header {
   text-align: center;
 }
 
+#refresh-btn { font-size: 1.1rem; margin-left: 0.25rem; }
+#refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+#refresh-btn.spinning { animation: spin 0.8s linear infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ------------------------------------------------------------------ */
 /* Legend                                                               */
 /* ------------------------------------------------------------------ */

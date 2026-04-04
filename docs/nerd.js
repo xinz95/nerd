@@ -41,11 +41,28 @@ function pythagoreanWinPct(rs, ra, exp = 1.83) {
 // Pitcher NERD
 // ---------------------------------------------------------------------------
 
-const PNERD_WEIGHTS = { xfip: 0.30, k9: 0.25, bb9: 0.20, velocity: 0.25 };
+// Pitch quality sub-component weights (velocity + movement, sum to 1)
+const PITCH_QUALITY_WEIGHTS = { velocity: 0.45, ivb: 0.35, absHb: 0.20 };
 
-function computeAllPnerds(seasonStats, saberStats, velocities, minIp = 5) {
-  const validVels = Object.values(velocities).filter(v => v !== null);
-  const leagueMedianVel = validVels.length ? median(validVels) : 93.0;
+// pNERD top-level weights (sum to 1)
+const PNERD_WEIGHTS = { xfip: 0.30, kPct: 0.25, bbPct: 0.20, pitchQuality: 0.25 };
+
+/**
+ * Computes pNERD scores for all pitchers.
+ *
+ * pitchDataMap: { playerId: { velocity, ivb, absHb } | null }
+ *
+ * Pitch quality is a composite z-score built from velocity, induced vertical
+ * break, and absolute horizontal break — each z-scored at the league level,
+ * then weighted. Missing sub-components substitute z = 0 (league average).
+ */
+function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
+
+  // League-level fallbacks for missing pitch sub-components
+  const allPd = Object.values(pitchDataMap).filter(Boolean);
+  const leagueMedVel  = median(allPd.map(d => d.velocity).filter(v => v != null)) || 93.0;
+  const leagueMedIvb  = median(allPd.map(d => d.ivb).filter(v => v != null))      || 8.0;
+  const leagueMedAbsHb = median(allPd.map(d => d.absHb).filter(v => v != null))   || 8.0;
 
   // Build qualifying rows
   const rows = {};
@@ -55,16 +72,19 @@ function computeAllPnerds(seasonStats, saberStats, velocities, minIp = 5) {
     if (ip < minIp) continue;
 
     const xfip = saber.xfip ?? saber.fip;
-    const k9 = season.k9;
-    if (xfip == null || k9 == null) continue;
+    const kPct = season.kPct;
+    if (xfip == null || kPct == null) continue;
 
+    const pd = pitchDataMap[pid];
     rows[pid] = {
       xfip,
-      usedFip: saber.xfip == null,
-      k9,
-      bb9: season.bb9 ?? 3.5,
-      velocity: velocities[pid] ?? leagueMedianVel,
-      noVelocity: velocities[pid] == null,
+      usedFip:    saber.xfip == null,
+      kPct,
+      bbPct:      season.bbPct ?? 0.085,
+      velocity:   pd?.velocity ?? leagueMedVel,
+      ivb:        pd?.ivb      ?? leagueMedIvb,
+      absHb:      pd?.absHb    ?? leagueMedAbsHb,
+      noPitchData: pd == null || (pd.velocity == null && pd.ivb == null),
       ip,
       starts: season.gamesStarted || 0,
     };
@@ -72,47 +92,49 @@ function computeAllPnerds(seasonStats, saberStats, velocities, minIp = 5) {
 
   const pids = Object.keys(rows);
   const pnerds = {};
-  const flags = {};
+  const flags  = {};
 
   if (pids.length === 0) {
     const allPids = new Set([...Object.keys(seasonStats), ...Object.keys(saberStats)]);
-    for (const pid of allPids) {
-      pnerds[pid] = 5.0;
-      flags[pid] = ['insufficient_data'];
-    }
+    for (const pid of allPids) { pnerds[pid] = 5.0; flags[pid] = ['insufficient_data']; }
     return { pnerds, flags };
   }
 
-  // Population stats
-  const xfipVals = pids.map(p => rows[p].xfip);
-  const k9Vals   = pids.map(p => rows[p].k9);
-  const bb9Vals  = pids.map(p => rows[p].bb9);
-  const velVals  = pids.map(p => rows[p].velocity);
-
-  const xfipMu = mean(xfipVals), xfipSig = stdev(xfipVals);
-  const k9Mu   = mean(k9Vals),   k9Sig   = stdev(k9Vals);
-  const bb9Mu  = mean(bb9Vals),  bb9Sig  = stdev(bb9Vals);
-  const velMu  = mean(velVals),  velSig  = stdev(velVals);
+  // Population distributions
+  const xfipMu  = mean(pids.map(p => rows[p].xfip)),     xfipSig   = stdev(pids.map(p => rows[p].xfip));
+  const kPctMu  = mean(pids.map(p => rows[p].kPct)),     kPctSig   = stdev(pids.map(p => rows[p].kPct));
+  const bbPctMu = mean(pids.map(p => rows[p].bbPct)),    bbPctSig  = stdev(pids.map(p => rows[p].bbPct));
+  const velMu   = mean(pids.map(p => rows[p].velocity)), velSig    = stdev(pids.map(p => rows[p].velocity));
+  const ivbMu   = mean(pids.map(p => rows[p].ivb)),      ivbSig    = stdev(pids.map(p => rows[p].ivb));
+  const absHbMu = mean(pids.map(p => rows[p].absHb)),    absHbSig  = stdev(pids.map(p => rows[p].absHb));
   const lowSamplePop = pids.length < 15;
 
   for (const pid of pids) {
     const r = rows[pid];
     const pidFlags = [];
-    if (r.usedFip)    pidFlags.push('used_fip_fallback');
-    if (r.noVelocity) pidFlags.push('no_velocity_data');
-    if (r.starts < 3) pidFlags.push('low_sample');
-    if (lowSamplePop) pidFlags.push('low_sample');
+    if (r.usedFip)     pidFlags.push('used_fip_fallback');
+    if (r.noPitchData) pidFlags.push('no_pitch_data');
+    if (r.starts < 3)  pidFlags.push('low_sample');
+    if (lowSamplePop)  pidFlags.push('low_sample');
 
-    const zXfip = -zscore(r.xfip, xfipMu, xfipSig); // inverted
-    const zK9   =  zscore(r.k9,   k9Mu,   k9Sig);
-    const zBb9  = -zscore(r.bb9,  bb9Mu,  bb9Sig);  // inverted
-    const zVel  =  zscore(r.velocity, velMu, velSig);
+    const zXfip  = -zscore(r.xfip,  xfipMu,  xfipSig);   // inverted
+    const zKPct  =  zscore(r.kPct,  kPctMu,  kPctSig);
+    const zBbPct = -zscore(r.bbPct, bbPctMu, bbPctSig);   // inverted
+
+    // Pitch quality: three sub-components, each league z-scored
+    const zVel   = zscore(r.velocity, velMu,   velSig);
+    const zIvb   = zscore(r.ivb,      ivbMu,   ivbSig);
+    const zAbsHb = zscore(r.absHb,    absHbMu, absHbSig);
+    const zPQ =
+      zVel   * PITCH_QUALITY_WEIGHTS.velocity +
+      zIvb   * PITCH_QUALITY_WEIGHTS.ivb +
+      zAbsHb * PITCH_QUALITY_WEIGHTS.absHb;
 
     const compositeZ =
-      zXfip * PNERD_WEIGHTS.xfip +
-      zK9   * PNERD_WEIGHTS.k9 +
-      zBb9  * PNERD_WEIGHTS.bb9 +
-      zVel  * PNERD_WEIGHTS.velocity;
+      zXfip  * PNERD_WEIGHTS.xfip +
+      zKPct  * PNERD_WEIGHTS.kPct +
+      zBbPct * PNERD_WEIGHTS.bbPct +
+      zPQ    * PNERD_WEIGHTS.pitchQuality;
 
     pnerds[pid] = zToTen(compositeZ);
     flags[pid]  = [...new Set(pidFlags)];
@@ -121,10 +143,7 @@ function computeAllPnerds(seasonStats, saberStats, velocities, minIp = 5) {
   // Fallback for pitchers not in qualified set
   const allPids = new Set([...Object.keys(seasonStats), ...Object.keys(saberStats)]);
   for (const pid of allPids) {
-    if (!(pid in pnerds)) {
-      pnerds[pid] = 5.0;
-      flags[pid]  = ['insufficient_data'];
-    }
+    if (!(pid in pnerds)) { pnerds[pid] = 5.0; flags[pid] = ['insufficient_data']; }
   }
 
   return { pnerds, flags };
@@ -289,13 +308,13 @@ function blendPitcherStats(
     blendedSeason[pid] = {
       era:          blendStat(cur?.era,          pri?.era),
       whip:         blendStat(cur?.whip,         pri?.whip),
-      k9:           blendStat(cur?.k9,           pri?.k9),
-      bb9:          blendStat(cur?.bb9,          pri?.bb9),
       hr9:          blendStat(cur?.hr9,          pri?.hr9),
       // Use current-year IP for qualifying threshold; add prior as context
       ip:           (cur?.ip ?? 0) + (pri?.ip ?? 0) * (1 - w),
       gamesStarted: cur?.gamesStarted ?? 0,
       teamId:       cur?.teamId ?? null, // always use current team
+      kPct:  blendStat(cur?.kPct,  pri?.kPct),
+      bbPct: blendStat(cur?.bbPct, pri?.bbPct),
     };
 
     blendedSaber[pid] = {

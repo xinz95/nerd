@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Methodology — NERD Baseball Watchability</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="methodology.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <a href="index.html" style="text-decoration:none">
+          <span class="brand-nerd">NERD</span>
+          <span class="brand-sub">Baseball Watchability</span>
+        </a>
+      </div>
+      <nav class="header-links">
+        <a href="index.html">← Back to Scores</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="method-page">
+
+    <h1>Methodology</h1>
+    <p class="intro">
+      NERD is a numerical estimate of the watchability of a given MLB game on a given day.
+      It is inspired by <a href="https://blogs.fangraphs.com/the-nerd-game-scores-for-april-5-2012/" target="_blank" rel="noopener">Carson Cistulli's NERD</a> at FanGraphs.
+      Each game receives a score from 0–10. A score of 5 represents a league-average game.
+      Higher is more watchable.
+    </p>
+
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Game NERD</h2>
+      <p>A game's score is a weighted combination of the two starting pitchers' scores and the two teams' scores:</p>
+
+      <div class="formula-block">
+        <div class="formula">
+          Game NERD = (pNERD<sub>away</sub> + pNERD<sub>home</sub>) / 2 &times; <strong>0.6</strong>
+          &nbsp;+&nbsp;
+          (tNERD<sub>away</sub> + tNERD<sub>home</sub>) / 2 &times; <strong>0.4</strong>
+        </div>
+        <p class="formula-note">Clamped to [0, 10].</p>
+      </div>
+
+      <p>
+        The 60/40 split reflects the view that the pitching matchup is the primary driver of
+        watchability — a marquee ace duel is more compelling than the same two teams with replacement-level starters.
+      </p>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Pitcher NERD (pNERD)</h2>
+      <p>
+        Each starting pitcher is scored on four components. Each component is
+        <strong>z-scored across all qualified starting pitchers league-wide</strong> for the current season,
+        then the weighted sum is mapped to the 0–10 scale.
+      </p>
+
+      <table class="components-table">
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Direction</th>
+            <th>Weight</th>
+            <th>Why it matters</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>xFIP</strong></td>
+            <td class="dir-good">lower = better <span class="inv-note">(inverted)</span></td>
+            <td>30%</td>
+            <td>Expected Fielding Independent Pitching — measures strikeouts, walks, and HR rate, normalizing HR/FB to league average. The best single predictor of true pitching quality.</td>
+          </tr>
+          <tr>
+            <td><strong>K%</strong></td>
+            <td class="dir-good">higher = better</td>
+            <td>25%</td>
+            <td>Strikeout rate (strikeouts / batters faced). Preferred over K/9 because it is not inflated by pitchers who allow lots of hits — every batter faced is treated equally. High-strikeout pitchers create more individual confrontations and are inherently more watchable.</td>
+          </tr>
+          <tr>
+            <td><strong>BB%</strong></td>
+            <td class="dir-bad">lower = better <span class="inv-note">(inverted)</span></td>
+            <td>20%</td>
+            <td>Walk rate (walks / batters faced). Preferred over BB/9 for the same reason as K%. Free passes kill pace and tension.</td>
+          </tr>
+          <tr>
+            <td><strong>Pitch Quality</strong></td>
+            <td class="dir-good">higher = better</td>
+            <td>25%</td>
+            <td>
+              A composite of three pitch-level components derived from play-by-play data for the pitcher's last 5 starts.
+              Each sub-component is z-scored at the league level before combining:
+              <ul style="margin-top:0.4rem">
+                <li><strong>Velocity</strong> (45%) — avg fastball speed (mph)</li>
+                <li><strong>Induced vertical break</strong> (35%) — avg "rise" on the fastball (inches). Measures how much the ball rises above a spinless trajectory — a proxy for backspin quality and carry.</li>
+                <li><strong>Absolute horizontal break</strong> (20%) — avg lateral movement (inches, sign-agnostic). More arm-side run or cut generally means harder to square up.</li>
+              </ul>
+              Fastball family: 4-seam (FF), 2-seam (FT), sinker (SI), cutter (FC).
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="formula-block">
+        <div class="formula">
+          z<sub>PQ</sub> = z(velocity) &times; 0.45 + z(IVB) &times; 0.35 + z(|HB|) &times; 0.20
+        </div>
+        <div class="formula">
+          composite<sub>z</sub> =
+          &minus;z(xFIP) &times; 0.30
+          + z(K%) &times; 0.25
+          &minus;z(BB%) &times; 0.20
+          + z<sub>PQ</sub> &times; 0.25
+        </div>
+        <div class="formula">
+          pNERD = 5 + clamp(composite<sub>z</sub>, &minus;3, 3) / 3 &times; 5
+        </div>
+        <p class="formula-note">
+          All z-scores are computed over all pitchers meeting the innings threshold (see Qualifying Thresholds).
+          Clamping at ±3 standard deviations prevents extreme outliers from compressing everyone else.
+        </p>
+      </div>
+
+      <h3>Fallback: FIP</h3>
+      <p>
+        If xFIP is not available for a pitcher, FIP is substituted. The card is flagged
+        <span class="inline-flag">FIP used</span>.
+      </p>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Team NERD (tNERD)</h2>
+      <p>
+        Each team is scored on four components, z-scored across all 30 MLB teams and mapped to 0–10.
+        tNERD captures whether a team is interesting to watch independent of today's starter.
+      </p>
+
+      <table class="components-table">
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Direction</th>
+            <th>Weight</th>
+            <th>Why it matters</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>wRC+</strong></td>
+            <td class="dir-good">higher = better</td>
+            <td>35%</td>
+            <td>Weighted Runs Created Plus — measures overall offensive production relative to league average (100 = average). Offensively explosive teams are more watchable.</td>
+          </tr>
+          <tr>
+            <td><strong>Proxy ERA</strong></td>
+            <td class="dir-bad">lower = better <span class="inv-note">(inverted)</span></td>
+            <td>30%</td>
+            <td>Runs allowed per 9 innings (from season-to-date standings). Strong pitching staffs suppress scoring and create more tension.</td>
+          </tr>
+          <tr>
+            <td><strong>Pythagorean Luck</strong></td>
+            <td class="dir-bad">closer to 0 = better <span class="inv-note">(inverted)</span></td>
+            <td>20%</td>
+            <td>
+              Actual win% minus Pythagorean win% (RS<sup>1.83</sup> / (RS<sup>1.83</sup> + RA<sup>1.83</sup>)).
+              A team significantly overperforming its run differential is due for regression — less interesting to watch. Underperformers have upside. Teams near 0 are playing as expected.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Run Differential / G</strong></td>
+            <td class="dir-bad">closer to 0 = better <span class="inv-note">(inverted)</span></td>
+            <td>15%</td>
+            <td>Absolute run differential per game. Lopsided teams (very dominant or very bad) make for less competitive games. Teams near zero tend to be in close contests.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="formula-block">
+        <div class="formula">
+          composite<sub>z</sub> =
+          z(wRC+) &times; 0.35
+          &minus; z(Proxy ERA) &times; 0.30
+          &minus; z(Luck) &times; 0.20
+          &minus; z(|RD/G|) &times; 0.15
+        </div>
+        <div class="formula">
+          tNERD = 5 + clamp(composite<sub>z</sub>, &minus;3, 3) / 3 &times; 5
+        </div>
+        <p class="formula-note">
+          wRC+ is computed as the median wRC+ across all qualified batters on the team (minimum 10 games).
+          Proxy ERA and run differential come directly from current standings.
+        </p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Early-Season Blending</h2>
+      <p>
+        In the first 30 games of the season, small sample sizes make current-year stats unreliable.
+        To compensate, pitcher stats are blended with prior-season stats using a linear weight based
+        on how many starts the pitcher has logged in the current season.
+      </p>
+
+      <div class="formula-block">
+        <div class="formula">
+          w = min(1, starts<sub>current</sub> / 5)
+        </div>
+        <div class="formula">
+          blended stat = stat<sub>current</sub> &times; w + stat<sub>prior</sub> &times; (1 &minus; w)
+        </div>
+        <p class="formula-note">
+          At 0 current starts: 100% prior season. At 5+ starts: 100% current season. Linear blend in between.
+          Blending applies to xFIP, FIP, K/9, and BB/9. Fastball velocity follows the same logic:
+          if no current-year velocity data exists, the prior season's average is used.
+        </p>
+      </div>
+
+      <table class="components-table">
+        <thead>
+          <tr><th>Pitcher situation</th><th>Result</th><th>Flag shown</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>0 starts this season, has prior MLB stats</td>
+            <td>100% prior-year stats</td>
+            <td><span class="inline-flag">2025 stats</span></td>
+          </tr>
+          <tr>
+            <td>1–4 starts this season</td>
+            <td>Linear blend of current + prior</td>
+            <td><span class="inline-flag">blended stats</span></td>
+          </tr>
+          <tr>
+            <td>5+ starts this season</td>
+            <td>100% current-year stats</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>No prior MLB stats (debut, NPB/KBO signing, etc.)</td>
+            <td>pNERD = 5.0 (league average)</td>
+            <td><span class="inline-flag">limited data</span></td>
+          </tr>
+          <tr>
+            <td>After game 30 of the season</td>
+            <td>Current-year stats only, no blending</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>
+        Team changes are handled automatically: prior-year stats are individual (not team-attributed),
+        so a pitcher who moved teams carries their 2025 numbers to their 2026 team without any manual correction needed.
+        tNERD is always computed from current-season standings and is unaffected by the blending.
+      </p>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Qualifying Thresholds</h2>
+      <p>
+        To be included in the z-score population (and thus receive a meaningful pNERD rather than the 5.0 default),
+        a pitcher must meet a minimum innings pitched threshold. This threshold scales with the season:
+      </p>
+      <div class="formula-block">
+        <div class="formula">
+          min IP = max(3, avg games played per team)
+        </div>
+        <p class="formula-note">
+          Early in April this is ~3–7 IP. By mid-season it rises to ~30+ IP.
+          This ensures the z-score population is never too thin to be meaningful.
+          Pitchers below the threshold receive pNERD = 5.0 and a <span class="inline-flag">limited data</span> flag.
+        </p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Pitch Quality Calculation</h2>
+      <p>
+        Pitch quality data is not available as a season-level aggregate from the MLB Stats API.
+        It is computed by fetching pitch-by-pitch play-by-play data for the pitcher's
+        <strong>last 5 starts</strong> and averaging these fields across all fastball-family pitches:
+      </p>
+      <table class="components-table">
+        <thead><tr><th>Field</th><th>API key</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Velocity</td><td><code>pitchData.startSpeed</code></td><td>Release speed in mph</td></tr>
+          <tr><td>Induced vertical break</td><td><code>pitchData.breaks.breakVerticalInduced</code></td><td>Inches of rise above a spinless trajectory</td></tr>
+          <tr><td>Horizontal break</td><td><code>pitchData.breaks.breakHorizontal</code></td><td>Lateral movement in inches (absolute value used)</td></tr>
+        </tbody>
+      </table>
+      <p>Fastball types included: <strong>FF</strong> (4-seam), <strong>FT</strong> (2-seam), <strong>SI</strong> (sinker), <strong>FC</strong> (cutter).</p>
+      <p>
+        Results are cached in <code>localStorage</code> for 1 hour. During early season blending,
+        if a pitcher has no current-year starts, pitch quality data is pulled from their prior-season
+        games instead.
+      </p>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Data Sources</h2>
+      <table class="components-table">
+        <thead>
+          <tr><th>Data</th><th>Endpoint</th><th>Cache TTL</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Schedule &amp; probable pitchers</td>
+            <td><code>/schedule?hydrate=probablePitcher,team</code></td>
+            <td>5 min (today) / 24 hr (past)</td>
+          </tr>
+          <tr>
+            <td>Pitcher season stats (K/9, BB/9, ERA…)</td>
+            <td><code>/stats?stats=season&amp;group=pitching</code></td>
+            <td>1 hr</td>
+          </tr>
+          <tr>
+            <td>Pitcher sabermetrics (xFIP, FIP, WAR…)</td>
+            <td><code>/stats?stats=sabermetrics&amp;group=pitching</code></td>
+            <td>1 hr</td>
+          </tr>
+          <tr>
+            <td>Hitting sabermetrics (wRC+, wOBA, WAR…)</td>
+            <td><code>/stats?stats=sabermetrics&amp;group=hitting</code></td>
+            <td>1 hr</td>
+          </tr>
+          <tr>
+            <td>Standings (W, L, RS, RA, RD…)</td>
+            <td><code>/standings?leagueId=103,104</code></td>
+            <td>30 min</td>
+          </tr>
+          <tr>
+            <td>Player game log</td>
+            <td><code>/people/{id}/stats?stats=gameLog</code></td>
+            <td>1 hr</td>
+          </tr>
+          <tr>
+            <td>Pitch-by-pitch (velocity)</td>
+            <td><code>/game/{gamePk}/playByPlay</code></td>
+            <td>24 hr</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>All data is sourced from the <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>, which is free and requires no authentication. All caching is done in browser <code>localStorage</code>.</p>
+    </section>
+
+    <!-- ------------------------------------------------------------------ -->
+    <section>
+      <h2>Limitations</h2>
+      <ul class="limitations">
+        <li>
+          <strong>Early season noise.</strong> Even with prior-year blending, scores in April reflect limited data.
+          Treat scores as directional rather than precise until ~May.
+        </li>
+        <li>
+          <strong>No ballpark adjustment.</strong> Playing at Coors Field or Petco Park affects run scoring, but tNERD does not currently park-adjust its proxy ERA or wRC+.
+        </li>
+        <li>
+          <strong>No bullpen component.</strong> A great starter matched with a terrible bullpen is still scored on the starter alone. Bullpen quality is partially captured in team proxy ERA but not isolated.
+        </li>
+        <li>
+          <strong>Debut players receive 5.0.</strong> Players with no prior MLB record (international signings, call-ups) have insufficient data for a meaningful score and default to league average.
+        </li>
+        <li>
+          <strong>TBD starters receive 5.0.</strong> When a probable pitcher hasn't been announced, both the pitcher score and its pNERD contribution default to league average.
+        </li>
+      </ul>
+    </section>
+
+  </div><!-- .method-page -->
+
+  <footer>
+    Data: <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>
+    &nbsp;&bull;&nbsp;
+    <a href="index.html">← Back to Scores</a>
+  </footer>
+
+</body>
+</html>

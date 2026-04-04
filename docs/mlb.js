@@ -126,11 +126,14 @@ async function getPitcherSeasonStats(season) {
     const pid = split.player?.id;
     if (!pid) continue;
     const s = split.stat || {};
+    const bf = parseInt(s.battersFaced) || 0;
+    const so = parseInt(s.strikeOuts) || 0;
+    const bb = parseInt(s.baseOnBalls) || 0;
     result[pid] = {
       era: parseFloat(s.era) || null,
       whip: parseFloat(s.whip) || null,
-      k9: parseFloat(s.strikeoutsPer9Inn) || null,
-      bb9: parseFloat(s.walksPer9Inn) || null,
+      kPct:  bf > 0 ? so / bf : null,
+      bbPct: bf > 0 ? bb / bf : null,
       hr9: parseFloat(s.homeRunsPer9) || null,
       ip: parseFloat(s.inningsPitched) || 0,
       gamesStarted: parseInt(s.gamesStarted) || 0,
@@ -227,45 +230,56 @@ async function getPlayByPlay(gamePk) {
   );
 }
 
-async function getPitcherVelocity(playerId, season, nGames = 5) {
-  const cacheKey = `velocity_${playerId}_${season}_${nGames}`;
-  const cached_vel = lsGet(cacheKey, 3600);
-  if (cached_vel !== null) return cached_vel.velocity;
+/**
+ * Returns pitch quality components for a pitcher from their last nGames starts:
+ *   { velocity, ivb, absHb }
+ *   velocity — avg fastball speed (mph)
+ *   ivb      — avg induced vertical break (inches, positive = rise)
+ *   absHb    — avg absolute horizontal break (inches)
+ * Any component may be null if insufficient data.
+ */
+async function getPitcherPitchData(playerId, season, nGames = 5) {
+  const cacheKey = `pitchdata_${playerId}_${season}_${nGames}`;
+  const hit = lsGet(cacheKey, 3600);
+  if (hit !== null) return hit;
 
   const gamePks = await getPlayerGameLog(playerId, season);
   if (!gamePks.length) {
-    lsSet(cacheKey, { velocity: null });
-    return null;
+    const empty = { velocity: null, ivb: null, absHb: null };
+    lsSet(cacheKey, empty);
+    return empty;
   }
 
   const recentPks = gamePks.slice(0, nGames);
   const pbpResults = await Promise.allSettled(recentPks.map(gp => getPlayByPlay(gp)));
 
-  const speeds = [];
+  const speeds = [], ivbs = [], hbs = [];
+
   for (const result of pbpResults) {
     if (result.status !== 'fulfilled') continue;
-    const pbp = result.value;
-    for (const play of pbp.allPlays || []) {
-      const pitcherId = play.matchup?.pitcher?.id;
-      if (pitcherId !== playerId) continue;
+    for (const play of result.value.allPlays || []) {
+      if (play.matchup?.pitcher?.id !== playerId) continue;
       for (const event of play.playEvents || []) {
         if (!event.isPitch) continue;
         const code = event.details?.type?.code || '';
         if (!FASTBALL_CODES.has(code)) continue;
-        const spd = event.pitchData?.startSpeed;
-        if (spd) speeds.push(parseFloat(spd));
+        const pd = event.pitchData || {};
+        if (pd.startSpeed)             speeds.push(parseFloat(pd.startSpeed));
+        if (pd.breaks?.breakVerticalInduced != null) ivbs.push(parseFloat(pd.breaks.breakVerticalInduced));
+        if (pd.breaks?.breakHorizontal != null)      hbs.push(Math.abs(parseFloat(pd.breaks.breakHorizontal)));
       }
     }
   }
 
-  const velocity = speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : null;
-  lsSet(cacheKey, { velocity });
-  return velocity;
+  const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+  const data = { velocity: avg(speeds), ivb: avg(ivbs), absHb: avg(hbs) };
+  lsSet(cacheKey, data);
+  return data;
 }
 
-async function getPitcherVelocitiesParallel(pitcherIds, season) {
+async function getPitcherPitchDataParallel(pitcherIds, season) {
   const results = await Promise.allSettled(
-    pitcherIds.map(pid => getPitcherVelocity(pid, season))
+    pitcherIds.map(pid => getPitcherPitchData(pid, season))
   );
   const map = {};
   pitcherIds.forEach((pid, i) => {

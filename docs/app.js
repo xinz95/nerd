@@ -55,7 +55,7 @@ function renderCard(game) {
     TBD_starter:       ['flag-tbd', '⚠ Starter TBD'],
     low_sample:        ['', 'small sample'],
     used_fip_fallback: ['', 'FIP used'],
-    no_velocity_data:  ['', 'no velo data'],
+    no_pitch_data:     ['', 'no pitch data'],
     insufficient_data: ['', 'limited data'],
     prior_year_stats:  ['', '2025 stats'],
     blended_stats:     ['', 'blended stats'],
@@ -181,22 +181,25 @@ async function loadGames(date) {
     const pitcherIds = [...new Set(
       schedule.flatMap(g => [g.homePitcherId, g.awayPitcherId]).filter(Boolean)
     )];
-    let velocities = await getPitcherVelocitiesParallel(pitcherIds, season);
+    let pitchDataMap = await getPitcherPitchDataParallel(pitcherIds, season);
 
-    // For pitchers with no current-year velocity, fall back to prior year
+    // For pitchers with no current-year pitch data, fall back to prior year
     if (avgGp < 30) {
-      const missingVelIds = pitcherIds.filter(pid => velocities[pid] == null);
-      if (missingVelIds.length > 0) {
-        const priorVelocities = await getPitcherVelocitiesParallel(missingVelIds, season - 1);
-        velocities = { ...velocities };
-        for (const pid of missingVelIds) {
-          if (priorVelocities[pid] != null) velocities[pid] = priorVelocities[pid];
+      const missingIds = pitcherIds.filter(pid => {
+        const pd = pitchDataMap[pid];
+        return pd == null || (pd.velocity == null && pd.ivb == null);
+      });
+      if (missingIds.length > 0) {
+        const priorPitchData = await getPitcherPitchDataParallel(missingIds, season - 1);
+        pitchDataMap = { ...pitchDataMap };
+        for (const pid of missingIds) {
+          if (priorPitchData[pid]?.velocity != null) pitchDataMap[pid] = priorPitchData[pid];
         }
       }
     }
 
     setStatus('Computing scores…');
-    const { pnerds, flags: pnerdFlags } = computeAllPnerds(effectiveSeasonStats, effectiveSaberStats, velocities, minIp);
+    const { pnerds, flags: pnerdFlags } = computeAllPnerds(effectiveSeasonStats, effectiveSaberStats, pitchDataMap, minIp);
 
     // Merge blend flags into pnerd flags
     const flags = { ...pnerdFlags };
@@ -248,6 +251,31 @@ function round2(n) {
 }
 
 // ---------------------------------------------------------------------------
+// Cache busting — clears all entries related to a given date + season
+// ---------------------------------------------------------------------------
+
+function bustCacheForDate(date) {
+  const season = parseInt(date.slice(0, 4));
+  const prefixes = [
+    `nerd__schedule_${date}`,
+    `nerd__pitcher_season_${season}`,
+    `nerd__pitcher_saber_${season}`,
+    `nerd__hitting_saber_${season}`,
+    `nerd__standings_${season}`,
+    `nerd__pitcher_season_${season - 1}`,
+    `nerd__pitcher_saber_${season - 1}`,
+  ];
+  // Also clear pitch data caches for this season (they embed the season in the key)
+  for (const k of Object.keys(localStorage)) {
+    if (prefixes.includes(k)) {
+      localStorage.removeItem(k);
+    } else if (k.startsWith('nerd__pitchdata_') && (k.includes(`_${season}_`) || k.includes(`_${season - 1}_`))) {
+      localStorage.removeItem(k);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Date navigation + auto-refresh
 // ---------------------------------------------------------------------------
 
@@ -260,6 +288,17 @@ document.getElementById('prev-day').addEventListener('click', () => {
 document.getElementById('next-day').addEventListener('click', () => {
   currentDate = shiftDate(currentDate, 1);
   loadGames(currentDate);
+});
+
+document.getElementById('refresh-btn').addEventListener('click', () => {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  bustCacheForDate(currentDate);
+  loadGames(currentDate).finally(() => {
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+  });
 });
 
 setInterval(() => loadGames(currentDate), 5 * 60 * 1000);
