@@ -137,19 +137,31 @@ async function loadGames(date) {
   const season  = parseInt(date.slice(0, 4));
   // Exclude the game day itself so scores reflect pre-game stats only.
   const endDate = shiftDate(date, -1);
+  const gameMonth     = parseInt(date.slice(5, 7));
+  const isEarlySeason = gameMonth <= 4;
+  const statsYear     = isEarlySeason ? season - 1 : season;
 
   try {
     setStatus('Fetching schedule…');
-    const [schedule, seasonStats, saberStats, hittingSaber, standings, hittingPA] = await Promise.all([
+
+    // pNERD scores come from the shared loader (same population + scores as
+    // the pitchers page). tNERD data is fetched separately since it needs
+    // standings and hitting stats for the correct season.
+    const tNerdSeason = statsYear; // both use prior year during early season
+    const [schedule, { pnerds, flags: pnerdFlags }, hittingSaber, standings, hittingPA] = await Promise.all([
       getSchedule(date),
-      getPitcherSeasonStats(season, endDate),
-      getPitcherSabermetrics(season, endDate),
-      getHittingSabermetrics(season, endDate),
-      getStandings(season, endDate),
-      getHittingSeasonStats(season, endDate),
+      loadAllPnerds(statsYear, endDate),
+      getHittingSabermetrics(tNerdSeason, isEarlySeason ? null : endDate),
+      getStandings(tNerdSeason, isEarlySeason ? null : endDate),
+      getHittingSeasonStats(tNerdSeason, isEarlySeason ? null : endDate),
     ]);
-    for (const [pid, pa] of Object.entries(hittingPA)) {
-      if (hittingSaber[pid]) hittingSaber[pid].pa = pa;
+
+    // Merge plate appearances and strikeouts into hittingSaber for tNERD.
+    for (const [pid, { pa, so }] of Object.entries(hittingPA)) {
+      if (hittingSaber[pid]) {
+        hittingSaber[pid].pa = pa;
+        hittingSaber[pid].so = so;
+      }
     }
 
     if (!schedule.length) {
@@ -158,65 +170,17 @@ async function loadGames(date) {
       return;
     }
 
-    // Estimate how far into the season we are (for minIp threshold)
-    const gpVals = Object.values(standings).map(s => s.gamesPlayed).filter(g => g > 0);
-    const avgGp = gpVals.length ? gpVals.reduce((a, b) => a + b, 0) / gpVals.length : 1;
-    const minIp = Math.max(3, avgGp);
-
-    // Use prior year stats for all March/April games (small sample size)
-    const gameMonth = parseInt(date.slice(5, 7));
-    const isEarlySeason = gameMonth <= 4;
-    let effectiveSeasonStats = seasonStats;
-    let effectiveSaberStats  = saberStats;
-    let blendFlags            = {};
-
-    let effectiveHittingSaber = hittingSaber;
-    let effectiveStandings    = standings;
-
+    // Tag all pitchers with prior_year_stats during early season.
+    const flags = { ...pnerdFlags };
     if (isEarlySeason) {
-      setStatus('Fetching prior season stats (March/April)…');
-      const [priorSeason, priorSaber, priorHitting, priorStandings, priorHittingPA] = await Promise.all([
-        getPitcherSeasonStats(season - 1),
-        getPitcherSabermetrics(season - 1),
-        getHittingSabermetrics(season - 1),
-        getStandings(season - 1),
-        getHittingSeasonStats(season - 1),
-      ]);
-      for (const [pid, pa] of Object.entries(priorHittingPA)) {
-        if (priorHitting[pid]) priorHitting[pid].pa = pa;
+      for (const pid of Object.keys(pnerds)) {
+        if (!flags[pid]) flags[pid] = [];
+        if (!flags[pid].includes('prior_year_stats')) flags[pid].push('prior_year_stats');
       }
-      effectiveSeasonStats   = priorSeason;
-      effectiveSaberStats    = priorSaber;
-      effectiveHittingSaber  = priorHitting;
-      effectiveStandings     = priorStandings;
-      const allPriorPids = new Set([...Object.keys(priorSeason), ...Object.keys(priorSaber)]);
-      for (const pid of allPriorPids) blendFlags[pid] = 'prior_year_stats';
     }
-
-    setStatus(`Fetching pitcher velocity data… (this may take a moment on first load)`);
-
-    // Fetch pitch data for ALL qualifying starters (same population as the pitcher list page)
-    // so that pNERD z-scores are normalized over the same pool and scores stay consistent.
-    const allStarterIds = Object.entries(effectiveSeasonStats)
-      .filter(([, s]) => (s.gamesStarted || 0) >= 1)
-      .map(([pid]) => Number(pid));
-    const todayStarterIds = schedule.flatMap(g => [g.homePitcherId, g.awayPitcherId]).filter(Boolean).map(Number);
-    const pitcherIds = [...new Set([...allStarterIds, ...todayStarterIds])];
-    // During March/April use prior year pitch data; otherwise use current year.
-    const pitchSeason = isEarlySeason ? season - 1 : season;
-    let pitchDataMap = await getPitcherPitchDataParallel(pitcherIds, pitchSeason, date);
 
     setStatus('Computing scores…');
-    const { pnerds, flags: pnerdFlags } = computeAllPnerds(effectiveSeasonStats, effectiveSaberStats, pitchDataMap, minIp);
-
-    // Merge blend flags into pnerd flags
-    const flags = { ...pnerdFlags };
-    for (const [pid, bFlag] of Object.entries(blendFlags)) {
-      if (!bFlag) continue;
-      if (!flags[pid]) flags[pid] = [];
-      if (!flags[pid].includes(bFlag)) flags[pid].push(bFlag);
-    }
-    const { tnerds } = computeAllTnerds(effectiveStandings, effectiveHittingSaber);
+    const { tnerds } = computeAllTnerds(standings, hittingSaber);
 
     // Assemble game results
     const results = schedule.map(g => {
@@ -274,6 +238,10 @@ function bustCacheForDate(date) {
     `nerd__standings_${season}`,
     `nerd__pitcher_season_${season - 1}`,
     `nerd__pitcher_saber_${season - 1}`,
+    `nerd__pnerds_all_${season}`,
+    `nerd__pnerds_all_${season - 1}`,
+    `nerd__pnerds_all_v2_${season}`,
+    `nerd__pnerds_all_v2_${season - 1}`,
   ];
   for (const k of Object.keys(localStorage)) {
     if (prefixes.some(p => k === p || k.startsWith(p + '_'))) {

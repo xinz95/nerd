@@ -131,7 +131,7 @@
   height: 36px;
   border-radius: 50%;
   object-fit: cover;
-  object-position: 50% 15%;
+  object-position: 50% calc(15% - 5px);
   display: block;
   background: var(--surface);
 }
@@ -142,6 +142,9 @@
   min-width: 160px;
   white-space: nowrap;
 }
+
+.col-name a { color: inherit; text-decoration: none; }
+.col-name a:hover { text-decoration: underline; }
 
 .col-team {
   color: var(--text-muted);

@@ -102,13 +102,9 @@
   min-width: 170px;
 }
 
-.col-abbr {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  min-width: 42px;
-}
+.col-team-name a { color: inherit; text-decoration: none; }
+.col-team-name a:hover { text-decoration: underline; }
+
 
 .record-cell { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
@@ -160,6 +156,8 @@
 /* ------------------------------------------------------------------ */
 @media (max-width: 680px) {
   .col-proxy-era { display: none; }
+  .col-bp-era    { display: none; }
+  .col-kpct      { display: none; }
   .brand-sub     { display: none; }
 }
 

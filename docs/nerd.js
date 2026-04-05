@@ -209,23 +209,35 @@ function computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp = 5) {
 // Team NERD
 // ---------------------------------------------------------------------------
 
-const TNERD_WEIGHTS = { wrcPlus: 0.35, proxyEra: 0.30, luck: 0.20, absDiff: 0.15 };
+const TNERD_WEIGHTS = { wrcPlus: 0.30, proxyEra: 0.125, bullpenEra: 0.125, luck: 0.20, absDiff: 0.15, kPct: 0.10 };
 
-function computeAllTnerds(standings, hittingSaber, minGames = 3) {
-  // Aggregate PA-weighted mean wRC+ per team.
+function computeAllTnerds(standings, hittingSaber, bullpenEra = {}, minGames = 3) {
+  // Aggregate PA-weighted mean wRC+ and team K% per team.
   // Weighting by plate appearances ensures that full-time regulars drive the
   // team score rather than bench players or call-ups with a handful of PAs.
   const teamWrcAcc = {}; // { teamId: { weightedSum, totalPa } }
+  const teamKAcc   = {}; // { teamId: { totalSo, totalPa } }
   for (const h of Object.values(hittingSaber)) {
-    const { teamId, wrcPlus, pa } = h;
-    if (!teamId || wrcPlus == null || pa < 10) continue;
-    if (!teamWrcAcc[teamId]) teamWrcAcc[teamId] = { weightedSum: 0, totalPa: 0 };
-    teamWrcAcc[teamId].weightedSum += wrcPlus * pa;
-    teamWrcAcc[teamId].totalPa    += pa;
+    const { teamId, wrcPlus, pa, so } = h;
+    if (!teamId || pa < 10) continue;
+    if (wrcPlus != null) {
+      if (!teamWrcAcc[teamId]) teamWrcAcc[teamId] = { weightedSum: 0, totalPa: 0 };
+      teamWrcAcc[teamId].weightedSum += wrcPlus * pa;
+      teamWrcAcc[teamId].totalPa    += pa;
+    }
+    if (so != null) {
+      if (!teamKAcc[teamId]) teamKAcc[teamId] = { totalSo: 0, totalPa: 0 };
+      teamKAcc[teamId].totalSo += so;
+      teamKAcc[teamId].totalPa += pa;
+    }
   }
   const teamMedianWrc = {};
   for (const [tid, { weightedSum, totalPa }] of Object.entries(teamWrcAcc)) {
     if (totalPa > 0) teamMedianWrc[tid] = weightedSum / totalPa;
+  }
+  const teamKPct = {};
+  for (const [tid, { totalSo, totalPa }] of Object.entries(teamKAcc)) {
+    if (totalPa > 0) teamKPct[tid] = totalSo / totalPa;
   }
 
   const rows = {};
@@ -243,7 +255,9 @@ function computeAllTnerds(standings, hittingSaber, minGames = 3) {
     const absRdPerGame   = Math.abs(signedRdPerGame);
 
     rows[tid] = {
-      wrcPlus: teamMedianWrc[tid] ?? 100,
+      wrcPlus:    teamMedianWrc[tid] ?? 100,
+      kPct:       teamKPct[tid] ?? null,
+      bullpenEra: bullpenEra[tid] ?? null,
       proxyEra,
       luck,
       signedRdPerGame,
@@ -265,36 +279,62 @@ function computeAllTnerds(standings, hittingSaber, minGames = 3) {
   const eraVals  = tids.map(t => rows[t].proxyEra);
   const luckVals = tids.map(t => rows[t].luck);
   const rdVals   = tids.map(t => rows[t].absRdPerGame);
+  const kVals    = tids.map(t => rows[t].kPct).filter(v => v != null);
+  const bpVals   = tids.map(t => rows[t].bullpenEra).filter(v => v != null);
 
   const wrcMu  = mean(wrcVals),  wrcSig  = stdev(wrcVals);
   const eraMu  = mean(eraVals),  eraSig  = stdev(eraVals);
   const luckMu = mean(luckVals), luckSig = stdev(luckVals);
   const rdMu   = mean(rdVals),   rdSig   = stdev(rdVals);
+  const kMu    = mean(kVals),    kSig    = stdev(kVals);
+  const bpMu   = mean(bpVals),   bpSig   = stdev(bpVals);
 
+  // First pass: compute component z-scores and raw composite for each team.
+  const rawComposites = {};
+  const perTeam = {};
   for (const tid of tids) {
     const r = rows[tid];
-    const zWrc  =  zscore(r.wrcPlus,     wrcMu,  wrcSig);
-    const zEra  = -zscore(r.proxyEra,    eraMu,  eraSig);  // inverted
-    const zLuck = -zscore(r.luck,        luckMu, luckSig); // overperforming = less interesting
-    const zRd   = -zscore(r.absRdPerGame, rdMu,   rdSig);  // close games = more interesting
+    const zWrc   =  zscore(r.wrcPlus,      wrcMu,  wrcSig);
+    const zEra   = -zscore(r.proxyEra,     eraMu,  eraSig);  // inverted
+    const zBpEra = r.bullpenEra != null ? -zscore(r.bullpenEra, bpMu, bpSig) : 0; // inverted
+    const zLuck  =  zscore(r.luck,         luckMu, luckSig); // overperforming = more interesting
+    const zRd    = -zscore(r.absRdPerGame, rdMu,   rdSig);   // close games = more interesting
+    const zKPct  = r.kPct != null ? -zscore(r.kPct, kMu, kSig) : 0; // inverted: low K% = more action
 
-    const compositeZ =
-      zWrc  * TNERD_WEIGHTS.wrcPlus +
-      zEra  * TNERD_WEIGHTS.proxyEra +
-      zLuck * TNERD_WEIGHTS.luck +
-      zRd   * TNERD_WEIGHTS.absDiff;
+    rawComposites[tid] =
+      zWrc   * TNERD_WEIGHTS.wrcPlus +
+      zEra   * TNERD_WEIGHTS.proxyEra +
+      zBpEra * TNERD_WEIGHTS.bullpenEra +
+      zLuck  * TNERD_WEIGHTS.luck +
+      zRd    * TNERD_WEIGHTS.absDiff +
+      zKPct  * TNERD_WEIGHTS.kPct;
 
-    tnerds[tid] = zToTen(compositeZ);
+    perTeam[tid] = { r, zWrc, zEra, zBpEra, zLuck, zRd, zKPct };
+  }
+
+  // Second pass: re-normalize the composite z-scores across teams so scores
+  // always use the full 0–10 range rather than clustering near 5.
+  const compVals = Object.values(rawComposites);
+  const compMu  = mean(compVals);
+  const compSig = stdev(compVals);
+
+  for (const tid of tids) {
+    const { r, zWrc, zEra, zBpEra, zLuck, zRd, zKPct } = perTeam[tid];
+    const normalizedZ = zscore(rawComposites[tid], compMu, compSig);
+
+    tnerds[tid] = zToTen(normalizedZ);
     components[tid] = {
       wrcPlus:         r.wrcPlus,
+      kPct:            r.kPct,
       proxyEra:        r.proxyEra,
+      bullpenEra:      r.bullpenEra,
       luck:            r.luck,
       signedRdPerGame: r.signedRdPerGame,
       wins:            r.wins,
       losses:          r.losses,
       gp:              r.gp,
       // Directional z-scores: positive = good for tNERD
-      zWrc, zEra, zLuck, zRd,
+      zWrc, zEra, zBpEra, zLuck, zRd, zKPct,
     };
   }
 

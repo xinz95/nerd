@@ -78,19 +78,37 @@ async function loadTeams() {
   try {
     setStatus('Loading team stats…');
 
-    const [standings, hittingSaber, hittingPA] = await Promise.all([
+    const [standings, hittingSaber, hittingPA, pitcherStats] = await Promise.all([
       getStandings(statsYear, isEarlySeason ? null : endDate),
       getHittingSabermetrics(statsYear, isEarlySeason ? null : endDate),
       getHittingSeasonStats(statsYear, isEarlySeason ? null : endDate),
+      getPitcherSeasonStats(statsYear, isEarlySeason ? null : endDate),
     ]);
-    // Merge plate appearances into sabermetrics objects so computeAllTnerds
-    // can weight wRC+ by PA rather than treating every batter equally.
-    for (const [pid, pa] of Object.entries(hittingPA)) {
-      if (hittingSaber[pid]) hittingSaber[pid].pa = pa;
+    // Merge plate appearances and strikeouts into sabermetrics objects.
+    for (const [pid, { pa, so }] of Object.entries(hittingPA)) {
+      if (hittingSaber[pid]) { hittingSaber[pid].pa = pa; hittingSaber[pid].so = so; }
+    }
+
+    // Compute bullpen ERA per team: relievers = pitchers where starts < half of appearances.
+    const bpAcc = {}; // { teamId: { er, ip } }
+    for (const s of Object.values(pitcherStats)) {
+      const { teamId, era, ip, gamesStarted, gamesPlayed } = s;
+      if (!teamId || era == null || ip < 1) continue;
+      // Reliever: fewer than half of appearances are starts. Fall back to gamesStarted === 0
+      // if gamesPlayed is missing (e.g. stale cache before gamesPlayed was added).
+      const isReliever = gamesPlayed > 0 ? gamesStarted / gamesPlayed < 0.5 : gamesStarted === 0;
+      if (!isReliever) continue;
+      if (!bpAcc[teamId]) bpAcc[teamId] = { er: 0, ip: 0 };
+      bpAcc[teamId].er += era * ip / 9;
+      bpAcc[teamId].ip += ip;
+    }
+    const bullpenEra = {};
+    for (const [tid, { er, ip }] of Object.entries(bpAcc)) {
+      if (ip > 0) bullpenEra[tid] = (er / ip) * 9;
     }
 
     setStatus('Computing scores…');
-    const { tnerds, components } = computeAllTnerds(standings, hittingSaber);
+    const { tnerds, components } = computeAllTnerds(standings, hittingSaber, bullpenEra);
 
     // Build rows — one per team in standings
     allRows = Object.entries(standings)
@@ -101,19 +119,23 @@ async function loadTeams() {
         return {
           tid:    tidN,
           name:   st.name,
-          abbr:   st.abbr || '—',
+
           w:      st.wins,
           l:      st.losses,
           gp:     st.gamesPlayed,
           wrc:    comp?.wrcPlus         ?? null,
           pera:   comp?.proxyEra        ?? null,
+          bpEra:  comp?.bullpenEra      ?? null,
           luck:   comp?.luck            ?? null,
           rd:     comp?.signedRdPerGame ?? null,
+          kPct:   comp?.kPct            ?? null,
           tnerd:  tnerds[tidN] ?? tnerds[tid] ?? 5.0,
-          zWrc:   comp?.zWrc  ?? null,
-          zEra:   comp?.zEra  ?? null,
-          zLuck:  comp?.zLuck ?? null,
-          zRd:    comp?.zRd   ?? null,
+          zWrc:   comp?.zWrc   ?? null,
+          zEra:   comp?.zEra   ?? null,
+          zBpEra: comp?.zBpEra ?? null,
+          zLuck:  comp?.zLuck  ?? null,
+          zRd:    comp?.zRd    ?? null,
+          zKPct:  comp?.zKPct  ?? null,
           noData: comp == null,
         };
       });
@@ -139,13 +161,14 @@ async function loadTeams() {
 
 const SORT_FNS = {
   name:  r => r.name,
-  abbr:  r => r.abbr,
   w:     r => r.w,
   l:     r => r.l,
   wrc:   r => r.wrc,
   pera:  r => r.pera,
+  bpera: r => r.bpEra,
   luck:  r => r.luck,
   rd:    r => r.rd,
+  kpct:  r => r.kPct,
   tnerd: r => r.tnerd,
 };
 
@@ -194,6 +217,14 @@ function rowHtml(r) {
     ? `<span style="${zStyle(r.zEra)}">${r.pera.toFixed(2)}</span>`
     : na;
 
+  const bpEraStr = r.bpEra != null
+    ? `<span style="${zStyle(r.zBpEra)}">${r.bpEra.toFixed(2)}</span>`
+    : na;
+
+  const kPctStr = r.kPct != null
+    ? `<span style="${zStyle(r.zKPct)}">${(r.kPct * 100).toFixed(1)}%</span>`
+    : na;
+
   const insufficientNote = r.noData
     ? ' <span style="color:var(--text-muted);font-size:0.75em">(insufficient data)</span>'
     : '';
@@ -203,17 +234,22 @@ function rowHtml(r) {
     ? `<a href="${teamUrl}" target="_blank" rel="noopener">${r.name}</a>`
     : r.name;
   const logoUrl  = mlbTeamLogoUrl(r.tid);
+  const logoCell = logoUrl
+    ? `<img class="team-logo-img" src="${logoUrl}" alt="${r.abbr}" loading="lazy" onerror="this.style.display='none'">`
+    : '';
 
   return `
     <tr>
-      <td class="col-team-logo"><img class="team-logo-img" src="${logoUrl}" alt="${r.abbr}" loading="lazy" onerror="this.style.display='none'"></td>
+      <td class="col-team-logo">${logoCell}</td>
       <td class="col-team-name">${nameLink}${insufficientNote}</td>
-      <td class="col-abbr">${r.abbr}</td>
+
       <td class="num record-cell">${r.w}</td>
       <td class="num record-cell">${r.l}</td>
       <td class="num">${wrcStr}</td>
       <td class="num col-proxy-era">${peraStr}</td>
+      <td class="num col-bp-era">${bpEraStr}</td>
       <td class="num">${luckStr}</td>
+      <td class="num col-kpct">${kPctStr}</td>
       <td class="num col-rd">${rdStr}</td>
       <td class="num tnerd-cell"><span style="color:${color};font-weight:700">${r.tnerd.toFixed(1)}</span></td>
     </tr>`;

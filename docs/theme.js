@@ -10,11 +10,11 @@
   }
 
   function savedTheme() {
-    try { return localStorage.getItem(STORAGE_KEY) || 'dark'; } catch { return 'dark'; }
+    try { return localStorage.getItem(STORAGE_KEY) || 'light'; } catch { return 'light'; }
   }
 
   function toggleTheme() {
-    var next = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
+    var next = (document.documentElement.getAttribute('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
     try { localStorage.setItem(STORAGE_KEY, next); } catch {}
     applyTheme(next);
   }

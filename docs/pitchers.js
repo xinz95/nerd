@@ -83,117 +83,68 @@ function showError(msg) {
 async function loadPitchers() {
   const today  = todayISO();
   const season = parseInt(today.slice(0, 4));
+  const month  = parseInt(today.slice(5, 7));
+  const statsYear = month <= 4 ? season - 1 : season;
 
   try {
     setStatus('Loading pitcher stats…');
 
-    // Fetch season data + next 5 days of schedules concurrently
-    // Use yesterday as the stat cutoff so today's games don't affect scores.
-    const endDate   = shiftDate(today, -1);
-    const nextDates = [0,1,2,3,4,5,6,7,8,9,10,11,12,13].map(d => shiftDate(today, d));
-    const [seasonStats, saberStats, standings, ...upcomingSchedules] = await Promise.all([
-      getPitcherSeasonStats(season, endDate),
-      getPitcherSabermetrics(season, endDate),
-      getStandings(season, endDate),
-      ...nextDates.map(d => getSchedule(d)),
-    ]);
+    // Fetch pNERD scores (shared with game cards page) and 14-day schedule
+    // in parallel. The schedule is used for next-start indicators and current
+    // team overrides for traded/signed players.
+    const nextDates = Array.from({ length: 14 }, (_, i) => shiftDate(today, i));
 
-    // Determine how far into the season we are
-    const gpVals = Object.values(standings).map(s => s.gamesPlayed).filter(g => g > 0);
-    const avgGp  = gpVals.length ? gpVals.reduce((a, b) => a + b, 0) / gpVals.length : 1;
-    const minIp  = Math.max(3, avgGp);
+    const [{ pnerds, flags, components, seasonStats, saberStats }, ...upcomingSchedules] =
+      await Promise.all([
+        loadAllPnerds(statsYear),
+        ...nextDates.map(d => getSchedule(d)),
+      ]);
 
-    // Collect upcoming probable starters and their next start date
-    const upcomingStarts = {}; // { pid: isoDate } — earliest date wins
+    // Collect upcoming probable starters (next-start badge + current team override).
+    const upcomingStarts = {}; // { pid: isoDate }
+    const scheduleInfo   = {}; // { pid: { name, teamAbbr, teamId } }
     for (let i = 0; i < nextDates.length; i++) {
       for (const g of upcomingSchedules[i]) {
-        if (g.homePitcherId && !upcomingStarts[g.homePitcherId])
-          upcomingStarts[g.homePitcherId] = nextDates[i];
-        if (g.awayPitcherId && !upcomingStarts[g.awayPitcherId])
-          upcomingStarts[g.awayPitcherId] = nextDates[i];
-      }
-    }
-
-    // Use prior year stats for all March/April games (small sample size)
-    const todayMonth = parseInt(today.slice(5, 7));
-    const isEarlySeason = todayMonth <= 4;
-    let effectiveSeasonStats = seasonStats;
-    let effectiveSaberStats  = saberStats;
-    if (isEarlySeason) {
-      setStatus('Fetching prior season stats (March/April)…');
-      const [priorSeason, priorSaber] = await Promise.all([
-        getPitcherSeasonStats(season - 1),
-        getPitcherSabermetrics(season - 1),
-      ]);
-      effectiveSeasonStats = priorSeason;
-      effectiveSaberStats  = priorSaber;
-    }
-
-    // Build the union of pitcher IDs to display:
-    //   • anyone who has started at least one game this season
-    //   • anyone who is a probable starter in the next 5 days
-    const starterIds  = Object.entries(effectiveSeasonStats)
-      .filter(([, s]) => (s.gamesStarted || 0) >= 1)
-      .map(([pid]) => Number(pid));
-    const upcomingIds = Object.keys(upcomingStarts).map(Number);
-    const allPitcherIds = [...new Set([...starterIds, ...upcomingIds])];
-
-    setStatus(`Fetching pitch data for ${allPitcherIds.length} pitchers… (cached after first load)`);
-
-    // During March/April use prior year pitch data; otherwise use current year.
-    const pitchSeason = isEarlySeason ? season - 1 : season;
-    const pitchDataMap = await getPitcherPitchDataParallel(allPitcherIds, pitchSeason, today);
-
-    setStatus('Computing scores…');
-    const { pnerds, flags, components } = computeAllPnerds(
-      effectiveSeasonStats, effectiveSaberStats, pitchDataMap, minIp
-    );
-
-    // Build player name map: prior-year stats first, then current-year stats
-    // (for team accuracy), then upcoming schedule (most authoritative for current team)
-    const playerNames = {}; // { pid: { name, teamAbbr, teamId } }
-    for (const [pid, s] of Object.entries(effectiveSeasonStats)) {
-      if (s.name) playerNames[pid] = { name: s.name, teamAbbr: s.teamAbbr || '—', teamId: s.teamId || null };
-    }
-    // Override team with current-year data — covers players who changed teams since last year
-    for (const [pid, s] of Object.entries(seasonStats)) {
-      if (s.teamAbbr) {
-        if (playerNames[pid]) {
-          playerNames[pid].teamAbbr = s.teamAbbr;
-          if (s.teamId) playerNames[pid].teamId = s.teamId;
-        } else if (s.name) {
-          playerNames[pid] = { name: s.name, teamAbbr: s.teamAbbr, teamId: s.teamId || null };
+        if (g.homePitcherId && g.homePitcherName && g.homePitcherName !== 'TBD') {
+          if (!upcomingStarts[g.homePitcherId]) upcomingStarts[g.homePitcherId] = nextDates[i];
+          if (!scheduleInfo[g.homePitcherId])
+            scheduleInfo[g.homePitcherId] = { name: g.homePitcherName, teamAbbr: g.homeTeamAbbr, teamId: g.homeTeamId };
+        }
+        if (g.awayPitcherId && g.awayPitcherName && g.awayPitcherName !== 'TBD') {
+          if (!upcomingStarts[g.awayPitcherId]) upcomingStarts[g.awayPitcherId] = nextDates[i];
+          if (!scheduleInfo[g.awayPitcherId])
+            scheduleInfo[g.awayPitcherId] = { name: g.awayPitcherName, teamAbbr: g.awayTeamAbbr, teamId: g.awayTeamId };
         }
       }
     }
-    for (const schedule of upcomingSchedules) {
-      for (const g of schedule) {
-        if (g.homePitcherId && g.homePitcherName !== 'TBD' && g.homeTeamAbbr)
-          playerNames[g.homePitcherId] = { name: g.homePitcherName, teamAbbr: g.homeTeamAbbr, teamId: g.homeTeamId || null };
-        if (g.awayPitcherId && g.awayPitcherName !== 'TBD' && g.awayTeamAbbr)
-          playerNames[g.awayPitcherId] = { name: g.awayPitcherName, teamAbbr: g.awayTeamAbbr, teamId: g.awayTeamId || null };
-      }
-    }
 
-    // Assemble display rows
+    // Build display rows — require at least 50 IP to filter out spot starters.
+    const allPitcherIds = Object.entries(seasonStats)
+      .filter(([, s]) => s.gamesStarted >= 1 && (s.ip || 0) >= 50)
+      .map(([pid]) => Number(pid));
+
     allRows = allPitcherIds
-      .filter(pid => playerNames[pid]) // skip pitchers with no name to display
+      .filter(pid => seasonStats[pid]?.name)
       .map(pid => {
-        const comp = components[pid];  // null for below-threshold pitchers
-        const s    = effectiveSeasonStats[pid] || {};
-        const pn   = playerNames[pid];
+        const s    = seasonStats[pid] || {};
+        const saber = saberStats[pid] || {};
+        const comp  = components[pid];
+        // Schedule info overrides team assignment for traded/signed players.
+        const info  = scheduleInfo[pid];
+        const tAbbr = info?.teamAbbr || s.teamAbbr || '—';
+        const tId   = info?.teamId   || s.teamId   || null;
         return {
           pid,
-          name:        pn.name,
-          teamAbbr:    pn.teamAbbr,
-          teamId:      pn.teamId,
+          name:        s.name,
+          teamAbbr:    tAbbr,
+          teamId:      tId,
           gs:          s.gamesStarted || 0,
-          ip:          comp?.ip     ?? s.ip ?? 0,
-          xfip:        comp?.xfip   ?? null,
-          usedFip:     comp?.usedFip ?? false,
-          kPct:        comp?.kPct   ?? s.kPct  ?? null,
-          bbPct:       comp?.bbPct  ?? s.bbPct ?? null,
-          velocity:    comp?.velocity ?? null, // already null when noPitchData
+          ip:          comp?.ip    ?? s.ip ?? 0,
+          xfip:        comp?.xfip  ?? saber.xfip ?? saber.fip ?? null,
+          usedFip:     comp?.usedFip ?? (saber.xfip == null && saber.fip != null),
+          kPct:        comp?.kPct  ?? s.kPct  ?? null,
+          bbPct:       comp?.bbPct ?? s.bbPct ?? null,
+          velocity:    comp?.velocity ?? null,
           ivb:         comp?.ivb      ?? null,
           absHb:       comp?.absHb    ?? null,
           spinEff:     comp?.spinEff  ?? null,
@@ -201,10 +152,9 @@ async function loadPitchers() {
           pnerd:       pnerds[pid] ?? 5.0,
           flagList:    flags[pid] || [],
           upcoming:    upcomingStarts[pid] || null,
-          // Directional z-scores (positive = good) — for cell coloring
-          zXfip:  comp?.zXfip  ?? null,
-          zKPct:  comp?.zKPct  ?? null,
-          zBbPct: comp?.zBbPct ?? null,
+          zXfip:    comp?.zXfip    ?? null,
+          zKPct:    comp?.zKPct    ?? null,
+          zBbPct:   comp?.zBbPct   ?? null,
           zVel:     comp?.zVel     ?? null,
           zIvb:     comp?.zIvb     ?? null,
           zAbsHb:   comp?.zAbsHb   ?? null,
@@ -308,7 +258,7 @@ function rowHtml(r) {
     : '';
 
   const upcomingDot = r.upcoming
-    ? ' <span class="upcoming-dot" title="Starting in the next 5 days"></span>'
+    ? ' <span class="upcoming-dot" title="Starting in the next 14 days"></span>'
     : '';
 
   const headshotUrl = `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_67,q_auto:best/v1/people/${r.pid}/headshot/67/current`;

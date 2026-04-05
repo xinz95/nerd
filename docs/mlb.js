@@ -17,6 +17,24 @@ const TEAM_SLUGS = {
   146: 'marlins',     147: 'yankees',    158: 'brewers',
 };
 
+// Official MLB abbreviations keyed by team ID
+const TEAM_ABBR = {
+  108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC', 113: 'CIN',
+  114: 'CLE', 115: 'COL', 116: 'DET', 117: 'HOU', 118: 'KC',  119: 'LAD',
+  120: 'WSH', 121: 'NYM', 133: 'OAK', 134: 'PIT', 135: 'SD',  136: 'SEA',
+  137: 'SF',  138: 'STL', 139: 'TB',  140: 'TEX', 141: 'TOR', 142: 'MIN',
+  143: 'PHI', 144: 'ATL', 145: 'CWS', 146: 'MIA', 147: 'NYY', 158: 'MIL',
+};
+
+// ESPN abbreviations keyed by team ID (for logo CDN)
+const TEAM_ESPN = {
+  108: 'laa', 109: 'ari', 110: 'bal', 111: 'bos', 112: 'chc', 113: 'cin',
+  114: 'cle', 115: 'col', 116: 'det', 117: 'hou', 118: 'kc',  119: 'lad',
+  120: 'wsh', 121: 'nym', 133: 'oak', 134: 'pit', 135: 'sd',  136: 'sea',
+  137: 'sf',  138: 'stl', 139: 'tb',  140: 'tex', 141: 'tor', 142: 'min',
+  143: 'phi', 144: 'atl', 145: 'cws', 146: 'mia', 147: 'nyy', 158: 'mil',
+};
+
 function mlbPlayerUrl(name, playerId) {
   const slug = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -29,7 +47,8 @@ function mlbTeamUrl(teamId) {
 }
 
 function mlbTeamLogoUrl(teamId) {
-  return `https://www.mlb.com/assets/images/team/logos/${teamId}_primary_on_dark.svg`;
+  const abbr = TEAM_ESPN[teamId];
+  return abbr ? `https://a.espncdn.com/combiner/i?img=/i/teamlogos/mlb/500/${abbr}.png&w=56&h=56` : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,10 +136,10 @@ async function getSchedule(date) {
         status: g.status?.abstractGameState || '',
         homeTeamId: home.id,
         homeTeamName: home.name || '',
-        homeTeamAbbr: home.abbreviation || '',
+        homeTeamAbbr: home.abbreviation || TEAM_ABBR[home.id] || '',
         awayTeamId: away.id,
         awayTeamName: away.name || '',
-        awayTeamAbbr: away.abbreviation || '',
+        awayTeamAbbr: away.abbreviation || TEAM_ABBR[away.id] || '',
         homePitcherId: hp?.id || null,
         homePitcherName: hp?.fullName || 'TBD',
         awayPitcherId: ap?.id || null,
@@ -146,7 +165,7 @@ function parseGameTimeET(iso) {
 }
 
 async function getPitcherSeasonStats(season, endDate = null) {
-  const key    = `pitcher_season_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const key    = `pitcher_season_v2_${season}${endDate ? `_thru_${endDate}` : ''}`;
   const params = { stats: 'season', group: 'pitching', season, sportId: 1, gameType: 'R', limit: 2000 };
   if (endDate) params.endDate = endDate;
   const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
@@ -167,10 +186,11 @@ async function getPitcherSeasonStats(season, endDate = null) {
       hr9: parseFloat(s.homeRunsPer9) || null,
       ip: parseFloat(s.inningsPitched) || 0,
       gamesStarted: parseInt(s.gamesStarted) || 0,
+      gamesPlayed:  parseInt(s.gamesPlayed)  || 0,
       teamId: split.team?.id || null,
-      name:     split.player?.fullName     || null,
-      teamAbbr: split.team?.abbreviation   || null,
-      teamName: split.team?.name           || null,
+      name:     split.player?.fullName   || null,
+      teamAbbr: split.team?.abbreviation || TEAM_ABBR[split.team?.id] || null,
+      teamName: split.team?.name         || null,
     };
   }
   return result;
@@ -231,7 +251,10 @@ async function getHittingSeasonStats(season, endDate = null) {
   for (const split of raw.stats?.[0]?.splits || []) {
     const pid = split.player?.id;
     if (!pid) continue;
-    result[pid] = parseInt(split.stat?.plateAppearances) || 0;
+    result[pid] = {
+      pa: parseInt(split.stat?.plateAppearances) || 0,
+      so: parseInt(split.stat?.strikeOuts) || 0,
+    };
   }
   return result;
 }

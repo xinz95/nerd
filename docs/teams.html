@@ -43,12 +43,13 @@
         <tr>
           <th class="col-team-logo"></th>
           <th class="sortable col-team-name" data-col="name">Team</th>
-          <th class="col-abbr">Abbr</th>
           <th class="sortable num" data-col="w" title="Wins">W</th>
           <th class="sortable num" data-col="l" title="Losses">L</th>
           <th class="sortable num" data-col="wrc" title="Median wRC+ across qualified batters. League average = 100.">wRC+</th>
           <th class="sortable num col-proxy-era" data-col="pera" title="Proxy ERA — runs allowed per 9 innings (lower = better)">pERA</th>
-          <th class="sortable num" data-col="luck" title="Pythagorean luck: actual win% minus expected win%. Negative = underperforming (more interesting).">Luck</th>
+          <th class="sortable num col-bp-era" data-col="bpera" title="Bullpen ERA — ERA of relief pitchers (lower = better)">bpERA</th>
+          <th class="sortable num" data-col="luck" title="Pythagorean luck: actual win% minus expected win%. Positive = overperforming (more interesting).">Luck</th>
+          <th class="sortable num col-kpct" data-col="kpct" title="Team batting strikeout rate (lower = more balls in play = more action)">K%</th>
           <th class="sortable num col-rd" data-col="rd" title="Run differential per game (signed). Teams near 0 are more competitive.">RD/G</th>
           <th class="sortable num" data-col="tnerd" title="Team NERD score (0–10)">tNERD</th>
         </tr>
@@ -59,15 +60,15 @@
 
   <div class="table-legend hidden" id="table-legend">
     <span>Stat colors: <span style="color:#4caf74">green = better for watchability</span> &nbsp; <span style="color:#e05252">red = worse</span></span>
-    <span>Luck: negative = underperforming (regression expected = more interesting)</span>
+    <span>Luck: positive = overperforming (more interesting)</span>
   </div>
 
   <footer>
     Data: <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>
   </footer>
 
-  <script src="mlb.js?v=6"></script>
-  <script src="nerd.js?v=5"></script>
-  <script src="teams.js?v=4"></script>
+  <script src="mlb.js?v=10"></script>
+  <script src="nerd.js?v=8"></script>
+  <script src="teams.js?v=7"></script>
 </body>
 </html>
