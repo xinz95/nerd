@@ -1,13 +1,5 @@
 'use strict';
 
-// ---------------------------------------------------------------------------
-// Date utilities
-// ---------------------------------------------------------------------------
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function formatDisplayDate(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-US', {
@@ -15,30 +7,12 @@ function formatDisplayDate(iso) {
   });
 }
 
-function shiftDate(iso, days) {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d + days).toISOString().slice(0, 10);
-}
-
-// ---------------------------------------------------------------------------
-// NERD score → color (red → yellow → green)
-// ---------------------------------------------------------------------------
-
-function nerdColor(score) {
-  const s = Math.max(0, Math.min(10, score));
-  let r, g, b;
-  if (s <= 5) {
-    const t = s / 5;
-    r = Math.round(224 + (232 - 224) * t);
-    g = Math.round(82  + (184 - 82)  * t);
-    b = Math.round(82  + (75  - 82)  * t);
-  } else {
-    const t = (s - 5) / 5;
-    r = Math.round(232 + (76  - 232) * t);
-    g = Math.round(184 + (175 - 184) * t);
-    b = Math.round(75  + (116 - 75)  * t);
+function shortTeamName(name) {
+  if (!name) return name;
+  if (name.endsWith('Red Sox') || name.endsWith('White Sox') || name.endsWith('Blue Jays')) {
+    return name.split(' ').slice(-2).join(' ');
   }
-  return `rgb(${r},${g},${b})`;
+  return name.split(' ').pop();
 }
 
 // ---------------------------------------------------------------------------
@@ -47,7 +21,6 @@ function nerdColor(score) {
 
 function renderCard(game) {
   const color  = nerdColor(game.gameNerd);
-  const barPct = (game.gameNerd / 10 * 100).toFixed(1);
   const isLive = game.status === 'Live';
   const gameNum = game.gameNumber > 1 ? ` · Game ${game.gameNumber}` : '';
 
@@ -65,48 +38,70 @@ function renderCard(game) {
     .map(f => `<span class="flag ${FLAG_MAP[f][0]}">${FLAG_MAP[f][1]}</span>`)
     .join('');
 
+  const pitcherLink = (name, pid) => {
+    if (!pid) return name;
+    return `<a href="${mlbPlayerUrl(name, pid)}" target="_blank" rel="noopener" class="pitcher-link">${name}</a>`;
+  };
+
+  const statLine = (s, pid) => {
+    if (!pid) return '';
+    if (!s) return ' <span class="pitcher-record">(season debut)</span>';
+    const parts = [];
+    if (s.wins != null && s.losses != null) parts.push(`${s.wins}-${s.losses}`);
+    if (s.era != null) parts.push(`${s.era.toFixed(2)} ERA`);
+    return parts.length ? ` <span class="pitcher-record">(${parts.join(', ')})</span>` : '';
+  };
+
+  const awayLogoUrl = mlbTeamLogoUrl(game.awayTeamId);
+  const homeLogoUrl = mlbTeamLogoUrl(game.homeTeamId);
+  const awayLogoHtml = awayLogoUrl ? `<img class="team-logo-card" src="${awayLogoUrl}" alt="${game.awayTeamAbbr}" loading="lazy">` : '';
+  const homeLogoHtml = homeLogoUrl ? `<img class="team-logo-card" src="${homeLogoUrl}" alt="${game.homeTeamAbbr}" loading="lazy">` : '';
+
+  const headshot = pid => `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_67,q_auto:best/v1/people/${pid}/headshot/67/current`;
+  const awayHeadshotHtml = game.awayPitcherId
+    ? `<img class="pitcher-headshot-sm" src="${headshot(game.awayPitcherId)}" alt="${game.awayPitcherName}" loading="lazy">`
+    : '<span class="pitcher-headshot-sm pitcher-headshot-placeholder"></span>';
+  const homeHeadshotHtml = game.homePitcherId
+    ? `<img class="pitcher-headshot-sm" src="${headshot(game.homePitcherId)}" alt="${game.homePitcherName}" loading="lazy">`
+    : '<span class="pitcher-headshot-sm pitcher-headshot-placeholder"></span>';
+
   return `
     <article class="card">
       <div class="card-header" style="background:linear-gradient(135deg,${color}22,${color}08);border-bottom:2px solid ${color}55">
-        <div>
+        <div class="matchup">
+          <span class="matchup-team">
+            <span class="matchup-team-top">${awayLogoHtml}<span>${game.awayTeamAbbr}</span></span>
+            <span class="matchup-tnerd"><span class="tnerd-label">tNERD</span><span class="pnerd-badge" style="color:${nerdColor(game.awayTnerd)}">${game.awayTnerd.toFixed(1)}</span></span>
+          </span>
+          <span class="matchup-at">@</span>
+          <span class="matchup-team">
+            <span class="matchup-team-top">${homeLogoHtml}<span>${game.homeTeamAbbr}</span></span>
+            <span class="matchup-tnerd"><span class="tnerd-label">tNERD</span><span class="pnerd-badge" style="color:${nerdColor(game.homeTnerd)}">${game.homeTnerd.toFixed(1)}</span></span>
+          </span>
+        </div>
+        <div class="card-nerd-block">
           <div class="nerd-label">NERD</div>
           <div class="nerd-score" style="color:${color}">${game.gameNerd.toFixed(1)}</div>
         </div>
-        <div class="score-bar-wrap">
-          <div class="score-bar-track">
-            <div class="score-bar-fill" style="width:${barPct}%;background:${color}"></div>
-          </div>
-        </div>
       </div>
       <div class="card-body">
-        <div class="matchup">${game.awayTeamAbbr} @ ${game.homeTeamAbbr}</div>
+        ${flagsHtml ? `<div class="flags">${flagsHtml}</div>` : ''}
         <div class="game-meta">
-          ${isLive ? '<span class="status-live"></span>' : ''}${game.gameTimeET} ET${gameNum}
-          &bull; ${game.awayTeamName} @ ${game.homeTeamName}
+          <span>${isLive ? '<span class="status-live"></span>' : ''}${game.gameTimeET} ET${gameNum} &bull; ${shortTeamName(game.awayTeamName)} @ ${shortTeamName(game.homeTeamName)}</span>
+          <a href="${mlbGamedayUrl(game.gamePk)}" target="_blank" rel="noopener" class="gameday-link">Gameday ↗</a>
         </div>
         <div class="pitchers">
           <div class="pitcher-row">
-            <span class="pitcher-label">Away</span>
-            <span class="pitcher-name">${game.awayPitcherName}</span>
+            ${awayHeadshotHtml}
+            <span class="pitcher-name">${pitcherLink(game.awayPitcherName, game.awayPitcherId)}${statLine(game.awayPitcherStats, game.awayPitcherId)}</span>
             <span class="pnerd-badge" style="color:${nerdColor(game.awayPnerd)}">${game.awayPnerd.toFixed(1)}</span>
           </div>
           <div class="pitcher-row">
-            <span class="pitcher-label">Home</span>
-            <span class="pitcher-name">${game.homePitcherName}</span>
+            ${homeHeadshotHtml}
+            <span class="pitcher-name">${pitcherLink(game.homePitcherName, game.homePitcherId)}${statLine(game.homePitcherStats, game.homePitcherId)}</span>
             <span class="pnerd-badge" style="color:${nerdColor(game.homePnerd)}">${game.homePnerd.toFixed(1)}</span>
           </div>
         </div>
-        <div class="tnerd-row">
-          <div class="tnerd-item">
-            <span>${game.awayTeamAbbr} tNERD:</span>
-            <span class="tnerd-value">${game.awayTnerd.toFixed(1)}</span>
-          </div>
-          <div class="tnerd-item">
-            <span>${game.homeTeamAbbr} tNERD:</span>
-            <span class="tnerd-value">${game.homeTnerd.toFixed(1)}</span>
-          </div>
-        </div>
-        ${flagsHtml ? `<div class="flags">${flagsHtml}</div>` : ''}
       </div>
     </article>`;
 }
@@ -147,13 +142,13 @@ async function loadGames(date) {
     // pNERD scores come from the shared loader (same population + scores as
     // the pitchers page). tNERD data is fetched separately since it needs
     // standings and hitting stats for the correct season.
-    const tNerdSeason = statsYear; // both use prior year during early season
-    const [schedule, { pnerds, flags: pnerdFlags }, hittingSaber, standings, hittingPA] = await Promise.all([
+    const [schedule, { pnerds, flags: pnerdFlags }, hittingSaber, standings, hittingPA, currentSeasonStats] = await Promise.all([
       getSchedule(date),
       loadAllPnerds(statsYear, endDate),
-      getHittingSabermetrics(tNerdSeason, isEarlySeason ? null : endDate),
-      getStandings(tNerdSeason, isEarlySeason ? null : endDate),
-      getHittingSeasonStats(tNerdSeason, isEarlySeason ? null : endDate),
+      getHittingSabermetrics(statsYear, isEarlySeason ? null : endDate),
+      getStandings(statsYear, isEarlySeason ? null : endDate),
+      getHittingSeasonStats(statsYear, isEarlySeason ? null : endDate),
+      getPitcherSeasonStats(season, endDate),  // always current year for W-L/ERA display
     ]);
 
     // Merge plate appearances and strikeouts into hittingSaber for tNERD.
@@ -184,8 +179,8 @@ async function loadGames(date) {
 
     // Assemble game results
     const results = schedule.map(g => {
-      const homePnerd = round2(pnerds[g.homePitcherId] ?? 5.0);
-      const awayPnerd = round2(pnerds[g.awayPitcherId] ?? 5.0);
+      const homePnerd = round2(pnerds[g.homePitcherId] ?? 7.0);
+      const awayPnerd = round2(pnerds[g.awayPitcherId] ?? 7.0);
       const homeTnerd = round2(tnerds[g.homeTeamId] ?? 5.0);
       const awayTnerd = round2(tnerds[g.awayTeamId] ?? 5.0);
       const { gameNerd, pitcherComponent, teamComponent } = computeGameNerd(awayPnerd, homePnerd, awayTnerd, homeTnerd);
@@ -204,18 +199,39 @@ async function loadGames(date) {
         homePnerd, awayPnerd, homeTnerd, awayTnerd,
         pitcherComponent, teamComponent, gameNerd,
         flags: gameFlags,
+        homePitcherStats: currentSeasonStats?.[g.homePitcherId] ?? null,
+        awayPitcherStats: currentSeasonStats?.[g.awayPitcherId] ?? null,
       };
     });
 
-    results.sort((a, b) => b.gameNerd - a.gameNerd);
-
+    currentResults = results;
     document.getElementById('loading').classList.add('hidden');
-    document.getElementById('cards').innerHTML = results.map(renderCard).join('');
+    renderCards();
 
   } catch (err) {
     showError(`Failed to load: ${err.message}`);
     console.error(err);
   }
+}
+
+function parseTimeMinutes(timeET) {
+  const m = timeET.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return 0;
+  let h = parseInt(m[1]), min = parseInt(m[2]);
+  const ap = m[3].toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+function renderCards() {
+  const sorted = [...currentResults];
+  if (sortMode === 'nerd') {
+    sorted.sort((a, b) => b.gameNerd - a.gameNerd);
+  } else {
+    sorted.sort((a, b) => parseTimeMinutes(a.gameTimeET) - parseTimeMinutes(b.gameTimeET));
+  }
+  document.getElementById('cards').innerHTML = sorted.map(renderCard).join('');
 }
 
 function round2(n) {
@@ -233,18 +249,15 @@ function bustCacheForDate(date) {
   const prefixes = [
     `nerd__schedule_${date}`,
     `nerd__pitcher_season_${season}`,
-    `nerd__pitcher_saber_${season}`,
+    `nerd__pitcher_saber_all_${season}`,
     `nerd__hitting_saber_${season}`,
     `nerd__standings_${season}`,
     `nerd__pitcher_season_${season - 1}`,
-    `nerd__pitcher_saber_${season - 1}`,
-    `nerd__pnerds_all_${season}`,
-    `nerd__pnerds_all_${season - 1}`,
-    `nerd__pnerds_all_v2_${season}`,
-    `nerd__pnerds_all_v2_${season - 1}`,
+    `nerd__pitcher_saber_all_${season - 1}`,
+    `nerd__pnerds_all_`,
   ];
   for (const k of Object.keys(localStorage)) {
-    if (prefixes.some(p => k === p || k.startsWith(p + '_'))) {
+    if (prefixes.some(p => k === p || k.startsWith(p.endsWith('_') ? p : p + '_'))) {
       localStorage.removeItem(k);
     } else if (k.startsWith('nerd__pitchdata_') && (k.includes(`_${season}_`) || k.includes(`_${season - 1}_`))) {
       localStorage.removeItem(k);
@@ -256,7 +269,18 @@ function bustCacheForDate(date) {
 // Date navigation + auto-refresh
 // ---------------------------------------------------------------------------
 
-let currentDate = todayISO();
+let currentDate   = todayISO();
+let currentResults = [];
+let sortMode      = 'nerd';
+
+document.querySelectorAll('.filter-tab[data-sort]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    sortMode = btn.dataset.sort;
+    document.querySelectorAll('.filter-tab[data-sort]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (currentResults.length) renderCards();
+  });
+});
 
 document.getElementById('prev-day').addEventListener('click', () => {
   currentDate = shiftDate(currentDate, -1);

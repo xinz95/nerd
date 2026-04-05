@@ -86,31 +86,23 @@
             <td>Expected Fielding Independent Pitching — measures strikeouts, walks, and HR rate, normalizing HR/FB to league average. The best single predictor of true pitching quality.</td>
           </tr>
           <tr>
-            <td><strong>K%</strong></td>
+            <td><strong>K%&minus;BB%</strong></td>
             <td class="dir-good">higher = better</td>
-            <td>25%</td>
-            <td>Strikeout rate (strikeouts / batters faced). Preferred over K/9 because it is not inflated by pitchers who allow lots of hits — every batter faced is treated equally. High-strikeout pitchers create more individual confrontations and are inherently more watchable.</td>
-          </tr>
-          <tr>
-            <td><strong>BB%</strong></td>
-            <td class="dir-bad">lower = better <span class="inv-note">(inverted)</span></td>
-            <td>20%</td>
-            <td>Walk rate (walks / batters faced). Preferred over BB/9 for the same reason as K%. Free passes kill pace and tension.</td>
+            <td>40%</td>
+            <td>Strikeout rate minus walk rate (both measured per batter faced). Combining them into a single spread metric captures the two sides of pitcher control in one number — elite strikeout ability and elite command pull in the same direction, while poor command partially offsets a high K%. Rate stats are preferred over K/9 and BB/9 because they are not distorted by hit rates.</td>
           </tr>
           <tr>
             <td><strong>Pitch Quality</strong></td>
             <td class="dir-good">higher = better</td>
-            <td>25%</td>
+            <td>30%</td>
             <td>
-              A composite of three pitch-level components derived from play-by-play data for the pitcher's last 5 starts.
+              A composite of two pitch-level components derived from play-by-play data for the pitcher's last 5 starts.
               Each sub-component is z-scored at the league level before combining:
               <ul style="margin-top:0.4rem">
-                <li><strong>Velocity</strong> (35%) — avg fastball speed (mph)</li>
-                <li><strong>Induced vertical break</strong> (30%) — avg "rise" on the fastball (inches). Measures how much the ball rises above a spinless trajectory — a proxy for backspin quality and carry.</li>
-                <li><strong>Absolute horizontal break</strong> (15%) — avg lateral movement (inches, sign-agnostic). More arm-side run or cut generally means harder to square up.</li>
-                <li><strong>Spin Efficiency</strong> (20%) — total induced break (inches) per 1,000 RPM. Captures how much of the pitcher's spin translates into actual movement rather than being wasted as gyro (dead) spin.</li>
+                <li><strong>Velocity</strong> (50%) — avg fastball speed (mph)</li>
+                <li><strong>Whiff rate</strong> (50%) — swinging strikes / total swings across all pitch types. Directly measures swing-and-miss ability, the clearest signal of stuff quality.</li>
               </ul>
-              Fastball family: 4-seam (FF), 2-seam (FT), sinker (SI), cutter (FC).
+              IVB, |HB|, and spin efficiency are shown on the Pitchers page as context but are not included in the formula.
             </td>
           </tr>
         </tbody>
@@ -118,21 +110,22 @@
 
       <div class="formula-block">
         <div class="formula">
-          z<sub>PQ</sub> = z(velocity) &times; 0.35 + z(IVB) &times; 0.30 + z(|HB|) &times; 0.15 + z(SpEff) &times; 0.20
+          z<sub>PQ</sub> = z(velocity) &times; 0.50 + z(whiff%) &times; 0.50
         </div>
         <div class="formula">
           composite<sub>z</sub> =
           &minus;z(xFIP) &times; 0.30
-          + z(K%) &times; 0.25
-          &minus;z(BB%) &times; 0.20
-          + z<sub>PQ</sub> &times; 0.25
+          + z(K%&minus;BB%) &times; 0.40
+          + z<sub>PQ</sub> &times; 0.30
         </div>
         <div class="formula">
           pNERD = 5 + clamp(composite<sub>z</sub>, &minus;2, 2) / 2 &times; 5
         </div>
         <p class="formula-note">
-          All z-scores are computed over all pitchers meeting the innings threshold (see Qualifying Thresholds).
-          Clamping at ±2 standard deviations prevents extreme outliers from compressing everyone else.
+          All z-scores are computed over qualifying pitchers (see Qualifying Thresholds).
+          The weighted composite is then re-z-scored across the population before mapping to 0–10,
+          ensuring scores always spread across the full range rather than clustering near 5.
+          Clamping at ±2σ prevents extreme outliers from compressing everyone else.
         </p>
       </div>
 
@@ -249,7 +242,7 @@
           </tr>
           <tr>
             <td>No prior MLB stats (debut, NPB/KBO signing, etc.)</td>
-            <td>pNERD = 5.0 (league average)</td>
+            <td>pNERD = 7.0 (unknown upside)</td>
             <td><span class="inline-flag">limited data</span></td>
           </tr>
         </tbody>
@@ -266,9 +259,8 @@
       <h2>Qualifying Thresholds</h2>
       <p>
         To appear on the pitchers list and receive a meaningful pNERD score, a starter must have
-        pitched at least <strong>50 innings</strong> in the active stats season.
-        This filters out spot starters and injury-shortened seasons while still capturing
-        full-time starters who missed time.
+        made at least <strong>10 games started</strong> in the active stats season.
+        This filters out spot starters while still capturing full-time starters who missed time.
       </p>
       <p>
         Pitchers with no prior MLB record (debuts, international signings) are not present
@@ -283,18 +275,18 @@
       <p>
         Pitch quality data is not available as a season-level aggregate from the MLB Stats API.
         It is computed by fetching pitch-by-pitch play-by-play data for the pitcher's
-        <strong>last 5 starts</strong> and averaging these fields across all fastball-family pitches:
+        <strong>last 5 starts</strong>:
       </p>
       <table class="components-table">
         <thead><tr><th>Field</th><th>API key</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Velocity</td><td><code>pitchData.startSpeed</code></td><td>Release speed in mph</td></tr>
-          <tr><td>Induced vertical break</td><td><code>pitchData.breaks.breakVerticalInduced</code></td><td>Inches of rise above a spinless trajectory</td></tr>
-          <tr><td>Horizontal break</td><td><code>pitchData.breaks.breakHorizontal</code></td><td>Lateral movement in inches (absolute value used)</td></tr>
-          <tr><td>Spin rate</td><td><code>pitchData.breaks.spinRate</code></td><td>RPM — used to compute spin efficiency (induced break per 1,000 RPM)</td></tr>
+          <tr><td>Velocity</td><td><code>pitchData.startSpeed</code></td><td>Release speed in mph — fastball-family pitches only (FF, FT, SI, FC)</td></tr>
+          <tr><td>Whiff rate</td><td><code>details.code</code></td><td>Swinging strikes (codes S, W) / total swings (S, W, F, T, L, O, M, X, D, E) across all pitch types</td></tr>
+          <tr><td>Induced vertical break</td><td><code>pitchData.breaks.breakVerticalInduced</code></td><td>Inches of rise above a spinless trajectory (display only)</td></tr>
+          <tr><td>Horizontal break</td><td><code>pitchData.breaks.breakHorizontal</code></td><td>Lateral movement in inches, absolute value (display only)</td></tr>
+          <tr><td>Spin rate</td><td><code>pitchData.breaks.spinRate</code></td><td>RPM — used to compute spin efficiency (display only)</td></tr>
         </tbody>
       </table>
-      <p>Fastball types included: <strong>FF</strong> (4-seam), <strong>FT</strong> (2-seam), <strong>SI</strong> (sinker), <strong>FC</strong> (cutter).</p>
       <p>
         Results are cached in <code>localStorage</code> for 1 hour. During early season (March/April),
         pitch data is pulled from the prior year's games, consistent with the rest of the stats.
@@ -369,7 +361,7 @@
           <strong>Bullpen quality is team-level only.</strong> Bullpen ERA is captured in tNERD, but individual relief pitchers are not scored. A great starter matched with a shaky bullpen will have a high pNERD regardless.
         </li>
         <li>
-          <strong>Debut players receive 5.0.</strong> Players with no prior MLB record (international signings, call-ups) have insufficient data for a meaningful score and default to league average.
+          <strong>Debut players receive 7.0.</strong> Players with no prior MLB record (international signings, call-ups) have insufficient data for a meaningful score. They're given a slight above-average score to reflect the unknown upside of a new arm.
         </li>
         <li>
           <strong>TBD starters receive 5.0.</strong> When a probable pitcher hasn't been announced, both the pitcher score and its pNERD contribution default to league average.

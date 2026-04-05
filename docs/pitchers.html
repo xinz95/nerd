@@ -47,7 +47,7 @@
         <tr>
           <th class="th-group" colspan="5"></th>
           <th class="th-group" colspan="3">Season Stats</th>
-          <th class="th-group col-velo col-ivb col-abhb col-spineff" colspan="4">Pitch Quality (last 5 starts)</th>
+          <th class="th-group col-velo col-whiff col-ivb col-abhb col-spineff" colspan="5">Pitch Quality (last 5 starts)</th>
           <th class="th-group" colspan="2"></th>
         </tr>
         <tr>
@@ -60,6 +60,7 @@
           <th class="sortable num" data-col="kpct" title="Strikeout rate (strikeouts / batters faced)">K%</th>
           <th class="sortable num" data-col="bbpct" title="Walk rate (walks / batters faced)">BB%</th>
           <th class="sortable num col-velo" data-col="velocity" title="Average fastball velocity (mph)">Velo</th>
+          <th class="sortable num col-whiff" data-col="whiffrate" title="Whiff rate — swinging strikes / total swings across all pitch types (last 5 starts)">Whiff%</th>
           <th class="sortable num col-ivb" data-col="ivb" title="Induced vertical break (inches) — higher = more rise">IVB</th>
           <th class="sortable num col-abhb" data-col="abhb" title="Absolute horizontal break (inches)">|HB|</th>
           <th class="sortable num col-spineff" data-col="spineff" title="Spin efficiency proxy: total induced break (in) per 1,000 RPM. Higher = more of the pitcher's spin translates to movement rather than gyro (dead) spin.">SpEff</th>
@@ -81,9 +82,10 @@
     Data: <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>
   </footer>
 
-  <script src="mlb.js?v=10"></script>
-  <script src="nerd.js?v=8"></script>
-  <script src="pnerd-loader.js?v=2"></script>
+  <script src="utils.js?v=1"></script>
+  <script src="mlb.js?v=18"></script>
+  <script src="nerd.js?v=10"></script>
+  <script src="pnerd-loader.js?v=6"></script>
   <script src="pitchers.js?v=13"></script>
 </body>
 </html>

@@ -33,12 +33,14 @@
     </div>
   </nav>
 
-  <div class="legend">
-    <span class="legend-label">0</span>
-    <div class="legend-bar"></div>
-    <span class="legend-label">10</span>
-    <span class="legend-hint">higher = more watchable</span>
+  <div class="sort-bar">
+    <span class="sort-label">Sort by</span>
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-sort="nerd">NERD</button>
+      <button class="filter-tab" data-sort="time">Game Time</button>
+    </div>
   </div>
+
 
   <main id="main">
     <div id="loading" class="loading">Loading games&hellip;</div>
@@ -52,9 +54,10 @@
     &nbsp;&bull;&nbsp; Scores refresh every 5 min
   </footer>
 
-  <script src="mlb.js?v=10"></script>
-  <script src="nerd.js?v=8"></script>
-  <script src="pnerd-loader.js?v=2"></script>
-  <script src="app.js?v=6"></script>
+  <script src="utils.js?v=1"></script>
+  <script src="mlb.js?v=18"></script>
+  <script src="nerd.js?v=10"></script>
+  <script src="pnerd-loader.js?v=6"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

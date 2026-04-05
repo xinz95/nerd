@@ -22,32 +22,6 @@
   flex-wrap: wrap;
 }
 
-.filter-tabs {
-  display: flex;
-  gap: 0.25rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 3px;
-}
-
-.filter-tab {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.3rem 0.75rem;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  letter-spacing: 0.02em;
-}
-.filter-tab:hover { color: var(--text); }
-.filter-tab.active {
-  background: var(--surface-2);
-  color: var(--text);
-}
 
 .toolbar-summary {
   font-size: 0.82rem;
@@ -256,11 +230,43 @@ sup { font-size: 0.65em; color: var(--text-muted); }
 }
 
 @media (max-width: 680px) {
-  .pitchers-table .col-velo { display: none; }
+  .pitchers-table .col-velo,
+  .pitchers-table .col-whiff { display: none; }
   .brand-sub { display: none; }
 }
 
 @media (max-width: 520px) {
   .pitchers-table .col-ip,
   .pitchers-table .col-gs   { display: none; }
+}
+
+@media (max-width: 600px) {
+  /* Tighten toolbar */
+  .pitchers-toolbar { margin-top: 0.75rem; padding: 0 0.75rem; }
+
+  /* Table: allow horizontal scroll, keep name sticky */
+  .pitchers-table-wrap {
+    padding: 0 0.75rem;
+    max-height: none;
+  }
+
+  .pitchers-table { font-size: 0.8rem; }
+  .pitchers-table th,
+  .pitchers-table td { padding: 0.4rem 0.5rem; }
+
+  /* Sticky name column */
+  .pitchers-table .col-name,
+  .pitchers-table th.col-name {
+    position: sticky;
+    left: 0;
+    background: var(--surface);
+    z-index: 2;
+  }
+  .pitchers-table tbody tr:hover .col-name { background: var(--surface); }
+
+  /* Hide headshot on mobile to save space */
+  .pitchers-table .col-headshot { display: none; }
+
+  /* Bigger tap targets on filter tabs */
+  .filter-tab { min-height: 36px; }
 }

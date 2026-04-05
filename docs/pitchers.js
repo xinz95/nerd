@@ -1,35 +1,5 @@
 'use strict';
 
-// ---------------------------------------------------------------------------
-// Utilities (stand-alone — does not load app.js)
-// ---------------------------------------------------------------------------
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function shiftDate(iso, days) {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d + days).toISOString().slice(0, 10);
-}
-
-function nerdColor(score) {
-  const s = Math.max(0, Math.min(10, score));
-  let r, g, b;
-  if (s <= 5) {
-    const t = s / 5;
-    r = Math.round(224 + (232 - 224) * t);
-    g = Math.round(82  + (184 - 82)  * t);
-    b = Math.round(82  + (75  - 82)  * t);
-  } else {
-    const t = (s - 5) / 5;
-    r = Math.round(232 + (76  - 232) * t);
-    g = Math.round(184 + (175 - 184) * t);
-    b = Math.round(75  + (116 - 75)  * t);
-  }
-  return `rgb(${r},${g},${b})`;
-}
-
 function formatShortDate(iso) {
   const today    = todayISO();
   const tomorrow = shiftDate(today, 1);
@@ -39,18 +9,6 @@ function formatShortDate(iso) {
   return new Date(y, m - 1, d).toLocaleDateString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric',
   });
-}
-
-// ---------------------------------------------------------------------------
-// Cell coloring from directional z-score (positive = good)
-// ---------------------------------------------------------------------------
-
-function zStyle(z) {
-  if (z == null) return '';
-  const c = Math.max(-2.5, Math.min(2.5, z));
-  if (c >  0.35) return `color:rgba(76,175,116,${(0.55 + Math.min(c, 2) * 0.2).toFixed(2)})`;
-  if (c < -0.35) return `color:rgba(224,82,82,${(0.55 + Math.min(Math.abs(c), 2) * 0.2).toFixed(2)})`;
-  return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +50,7 @@ async function loadPitchers() {
     // Fetch pNERD scores (shared with game cards page) and 14-day schedule
     // in parallel. The schedule is used for next-start indicators and current
     // team overrides for traded/signed players.
-    const nextDates = Array.from({ length: 14 }, (_, i) => shiftDate(today, i));
+    const nextDates = Array.from({ length: 5 }, (_, i) => shiftDate(today, i));
 
     const [{ pnerds, flags, components, seasonStats, saberStats }, ...upcomingSchedules] =
       await Promise.all([
@@ -118,9 +76,9 @@ async function loadPitchers() {
       }
     }
 
-    // Build display rows — require at least 50 IP to filter out spot starters.
+    // Build display rows — require at least 10 GS to filter out spot starters.
     const allPitcherIds = Object.entries(seasonStats)
-      .filter(([, s]) => s.gamesStarted >= 1 && (s.ip || 0) >= 50)
+      .filter(([, s]) => s.gamesStarted >= 10)
       .map(([pid]) => Number(pid));
 
     allRows = allPitcherIds
@@ -144,10 +102,11 @@ async function loadPitchers() {
           usedFip:     comp?.usedFip ?? (saber.xfip == null && saber.fip != null),
           kPct:        comp?.kPct  ?? s.kPct  ?? null,
           bbPct:       comp?.bbPct ?? s.bbPct ?? null,
-          velocity:    comp?.velocity ?? null,
-          ivb:         comp?.ivb      ?? null,
-          absHb:       comp?.absHb    ?? null,
-          spinEff:     comp?.spinEff  ?? null,
+          velocity:    comp?.velocity  ?? null,
+          whiffRate:   comp?.whiffRate ?? null,
+          ivb:         comp?.ivb       ?? null,
+          absHb:       comp?.absHb     ?? null,
+          spinEff:     comp?.spinEff   ?? null,
           noPitchData: comp?.noPitchData ?? true,
           pnerd:       pnerds[pid] ?? 5.0,
           flagList:    flags[pid] || [],
@@ -156,6 +115,7 @@ async function loadPitchers() {
           zKPct:    comp?.zKPct    ?? null,
           zBbPct:   comp?.zBbPct   ?? null,
           zVel:     comp?.zVel     ?? null,
+          zWhiff:   comp?.zWhiff   ?? null,
           zIvb:     comp?.zIvb     ?? null,
           zAbsHb:   comp?.zAbsHb   ?? null,
           zSpinEff: comp?.zSpinEff ?? null,
@@ -188,10 +148,11 @@ const SORT_FNS = {
   xfip:     r => r.xfip,
   kpct:     r => r.kPct,
   bbpct:    r => r.bbPct,
-  velocity: r => r.velocity,
-  ivb:      r => r.ivb,
-  abhb:     r => r.absHb,
-  spineff:  r => r.spinEff,
+  velocity:  r => r.velocity,
+  whiffrate: r => r.whiffRate,
+  ivb:       r => r.ivb,
+  abhb:      r => r.absHb,
+  spineff:   r => r.spinEff,
   pnerd:    r => r.pnerd,
 };
 
@@ -241,6 +202,10 @@ function rowHtml(r) {
     ? `<span style="${zStyle(r.zVel)}">${r.velocity.toFixed(1)}</span>`
     : na;
 
+  const whiffStr = r.whiffRate != null
+    ? `<span style="${zStyle(r.zWhiff)}">${(r.whiffRate * 100).toFixed(1)}%</span>`
+    : na;
+
   const ivbStr = r.ivb != null
     ? `<span style="${zStyle(r.zIvb)}">${r.ivb.toFixed(1)}</span>`
     : na;
@@ -258,7 +223,7 @@ function rowHtml(r) {
     : '';
 
   const upcomingDot = r.upcoming
-    ? ' <span class="upcoming-dot" title="Starting in the next 14 days"></span>'
+    ? ' <span class="upcoming-dot" title="Starting in the next 5 days"></span>'
     : '';
 
   const headshotUrl = `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_67,q_auto:best/v1/people/${r.pid}/headshot/67/current`;
@@ -280,6 +245,7 @@ function rowHtml(r) {
       <td class="num">${kStr}</td>
       <td class="num">${bbStr}</td>
       <td class="num col-velo">${veloStr}</td>
+      <td class="num col-whiff">${whiffStr}</td>
       <td class="num col-ivb">${ivbStr}</td>
       <td class="num col-abhb">${abhbStr}</td>
       <td class="num col-spineff">${spinEffStr}</td>

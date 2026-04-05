@@ -129,9 +129,51 @@ header {
 /* ------------------------------------------------------------------ */
 /* Legend                                                               */
 /* ------------------------------------------------------------------ */
-.legend {
+.sort-bar {
   max-width: 1100px;
   margin: 1rem auto 0;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sort-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px;
+}
+
+.filter-tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  letter-spacing: 0.02em;
+}
+.filter-tab:hover { color: var(--text); }
+.filter-tab.active {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.legend {
+  max-width: 1100px;
+  margin: 0.5rem auto 0;
   padding: 0 1.5rem;
   display: flex;
   align-items: center;
@@ -184,6 +226,9 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
   gap: 1rem;
+  max-width: 1100px;
+  margin: 1rem auto;
+  padding: 0 1.5rem;
 }
 
 /* ------------------------------------------------------------------ */
@@ -201,20 +246,67 @@ main {
   box-shadow: 0 6px 24px rgba(0,0,0,0.4);
 }
 
-/* Coloured top band */
+/* Card header: matchup left, NERD score right */
 .card-header {
-  padding: 0.75rem 1rem 0.6rem;
+  padding: 0.3rem 0.85rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 1rem;
 }
 
-.nerd-score {
-  font-size: 2rem;
+.matchup {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.5rem;
   font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+}
+
+.matchup-team {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.matchup-team-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.matchup-tnerd {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.tnerd-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-logo-card {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.matchup-at {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.9rem;
+  align-self: center;
+}
+
+.card-nerd-block {
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .nerd-label {
@@ -226,34 +318,20 @@ main {
   margin-bottom: 2px;
 }
 
-.score-bar-wrap {
-  flex: 1;
-  margin-left: 0.5rem;
+.nerd-score {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-.score-bar-track {
-  height: 5px;
-  background: rgba(255,255,255,0.12);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.score-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-
-.card-body { padding: 0.75rem 1rem 1rem; }
-
-/* Matchup line */
-.matchup {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin-bottom: 0.2rem;
-}
+.card-body { padding: 0.35rem 0.85rem 0.65rem; }
 
 .game-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   font-size: 0.8rem;
   color: var(--text-muted);
   margin-bottom: 0.75rem;
@@ -267,7 +345,24 @@ main {
   justify-content: space-between;
   align-items: center;
   font-size: 0.88rem;
-  padding: 0.2rem 0;
+  padding: 0.25rem 0;
+  gap: 0.4rem;
+}
+
+.pitcher-headshot-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% calc(15% - 4px);
+  flex-shrink: 0;
+}
+
+.pitcher-headshot-placeholder {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
 }
 
 .pitcher-label {
@@ -276,7 +371,20 @@ main {
   min-width: 38px;
 }
 
-.pitcher-name { flex: 1; margin: 0 0.5rem; }
+.pitcher-name { flex: 1; }
+
+.pitcher-link {
+  color: inherit;
+  text-decoration: none;
+}
+.pitcher-link:hover { text-decoration: underline; }
+
+.pitcher-record {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 0.2rem;
+}
 
 .pnerd-badge {
   font-size: 0.8rem;
@@ -287,22 +395,9 @@ main {
   background: rgba(255,255,255,0.08);
 }
 
-/* Team tNERD row */
-.tnerd-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border);
-}
-
-.tnerd-item { display: flex; gap: 0.3rem; align-items: center; }
-.tnerd-value { font-weight: 600; color: var(--text); }
-
 /* Flags */
 .flags {
-  margin-top: 0.5rem;
+  margin-bottom: 0.4rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
@@ -316,6 +411,14 @@ main {
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
+
+.gameday-link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.gameday-link:hover { text-decoration: underline; }
 
 .flag-tbd { color: #e8b84b; border-color: rgba(232,184,75,0.3); }
 
@@ -411,8 +514,47 @@ footer {
 /* ------------------------------------------------------------------ */
 /* Responsive                                                           */
 /* ------------------------------------------------------------------ */
+
+/* Tablet and below */
 @media (max-width: 600px) {
   .brand-sub { display: none; }
   .cards-grid { grid-template-columns: 1fr; }
-  .legend-hint { display: none; }
+
+  /* Header: tighten date nav */
+  .header-inner { height: 52px; gap: 0.5rem; }
+  .date-nav { gap: 0.4rem; }
+  #date-display { font-size: 0.85rem; min-width: 100px; }
+  .date-nav button,
+  .theme-btn { width: 36px; height: 36px; } /* larger tap targets */
+
+  /* Tab nav: allow scroll, no wrap */
+  .tab-nav-inner {
+    padding: 0 0.75rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tab-nav-inner::-webkit-scrollbar { display: none; }
+  .tab-nav a { padding: 0.6rem 0.85rem; font-size: 0.8rem; white-space: nowrap; }
+
+  /* Sort bar */
+  .sort-bar { margin-top: 0.75rem; padding: 0 0.75rem; }
+
+  /* Cards */
+  .cards-grid { padding: 0 0.75rem; gap: 0.75rem; }
+
+  /* Card header: scale down logos and abbreviations */
+  .matchup { font-size: 1.15rem; gap: 0.4rem; }
+  .team-logo-card { width: 30px; height: 30px; }
+  .nerd-score { font-size: 1.6rem; }
+  .card-header { padding: 0.3rem 0.75rem; }
+  .card-body { padding: 0.35rem 0.75rem 0.6rem; }
+
+  /* Pitcher row: wrap stat line below name */
+  .pitcher-row { flex-wrap: wrap; gap: 0.3rem; }
+  .pitcher-name { width: 0; flex: 1 1 0; min-width: 0; }
+  .pitcher-record { display: block; margin-left: 0; }
+
+  /* Filter/sort tabs: bigger tap targets */
+  .filter-tab { padding: 0.4rem 0.85rem; min-height: 36px; }
 }

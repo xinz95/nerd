@@ -46,6 +46,10 @@ function mlbTeamUrl(teamId) {
   return slug ? `https://www.mlb.com/${slug}` : null;
 }
 
+function mlbGamedayUrl(gamePk) {
+  return `https://www.mlb.com/gameday/${gamePk}`;
+}
+
 function mlbTeamLogoUrl(teamId) {
   const abbr = TEAM_ESPN[teamId];
   return abbr ? `https://a.espncdn.com/combiner/i?img=/i/teamlogos/mlb/500/${abbr}.png&w=56&h=56` : null;
@@ -165,8 +169,8 @@ function parseGameTimeET(iso) {
 }
 
 async function getPitcherSeasonStats(season, endDate = null) {
-  const key    = `pitcher_season_v2_${season}${endDate ? `_thru_${endDate}` : ''}`;
-  const params = { stats: 'season', group: 'pitching', season, sportId: 1, gameType: 'R', limit: 2000 };
+  const key    = `pitcher_season_v5_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const params = { stats: 'season', group: 'pitching', season, sportId: 1, gameType: 'R', limit: 2000, playerPool: 'All' };
   if (endDate) params.endDate = endDate;
   const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
 
@@ -178,8 +182,11 @@ async function getPitcherSeasonStats(season, endDate = null) {
     const bf = parseInt(s.battersFaced) || 0;
     const so = parseInt(s.strikeOuts) || 0;
     const bb = parseInt(s.baseOnBalls) || 0;
+    const era = parseFloat(s.era);
     result[pid] = {
-      era: parseFloat(s.era) || null,
+      era: isNaN(era) ? null : era,
+      wins: parseInt(s.wins) ?? null,
+      losses: parseInt(s.losses) ?? null,
       whip: parseFloat(s.whip) || null,
       kPct:  bf > 0 ? so / bf : null,
       bbPct: bf > 0 ? bb / bf : null,
@@ -197,8 +204,8 @@ async function getPitcherSeasonStats(season, endDate = null) {
 }
 
 async function getPitcherSabermetrics(season, endDate = null) {
-  const key    = `pitcher_saber_${season}${endDate ? `_thru_${endDate}` : ''}`;
-  const params = { stats: 'sabermetrics', group: 'pitching', season, sportId: 1, limit: 2000 };
+  const key    = `pitcher_saber_all_${season}${endDate ? `_thru_${endDate}` : ''}`;
+  const params = { stats: 'sabermetrics', group: 'pitching', season, sportId: 1, limit: 2000, playerPool: 'All' };
   if (endDate) params.endDate = endDate;
   const raw = await cached(key, 3600, () => mlbFetch('/stats', params));
 
@@ -312,22 +319,27 @@ async function getPlayByPlay(gamePk) {
   );
 }
 
+// Pitch result codes that count as a swing (used for whiff rate).
+const SWING_CODES   = new Set(['S', 'W', 'F', 'T', 'L', 'O', 'M', 'X', 'D', 'E']);
+const WHIFF_CODES   = new Set(['S', 'W']); // swinging strikes only
+
 /**
  * Returns pitch quality components for a pitcher from their last nGames starts:
- *   { velocity, ivb, absHb }
- *   velocity — avg fastball speed (mph)
- *   ivb      — avg induced vertical break (inches, positive = rise)
- *   absHb    — avg absolute horizontal break (inches)
+ *   { velocity, ivb, absHb, spinRate, whiffRate }
+ *   velocity  — avg fastball speed (mph)
+ *   ivb       — avg induced vertical break on fastballs (inches)
+ *   absHb     — avg absolute horizontal break on fastballs (inches)
+ *   whiffRate — swinging strikes / total swings across all pitch types
  * Any component may be null if insufficient data.
  */
 async function getPitcherPitchData(playerId, season, nGames = 5, beforeDate = null) {
-  const cacheKey = `pitchdata_${playerId}_${season}_${nGames}${beforeDate ? `_thru_${beforeDate}` : ''}`;
+  const cacheKey = `pitchdata_v2_${playerId}_${season}_${nGames}${beforeDate ? `_thru_${beforeDate}` : ''}`;
   const hit = lsGet(cacheKey, 3600);
   if (hit !== null) return hit;
 
   const gamePks = await getPlayerGameLog(playerId, season, beforeDate);
   if (!gamePks.length) {
-    const empty = { velocity: null, ivb: null, absHb: null };
+    const empty = { velocity: null, ivb: null, absHb: null, spinRate: null, whiffRate: null };
     lsSet(cacheKey, empty);
     return empty;
   }
@@ -336,6 +348,7 @@ async function getPitcherPitchData(playerId, season, nGames = 5, beforeDate = nu
   const pbpResults = await Promise.allSettled(recentPks.map(gp => getPlayByPlay(gp)));
 
   const speeds = [], ivbs = [], hbs = [], spinRates = [];
+  let swings = 0, whiffs = 0;
 
   for (const result of pbpResults) {
     if (result.status !== 'fulfilled') continue;
@@ -343,19 +356,32 @@ async function getPitcherPitchData(playerId, season, nGames = 5, beforeDate = nu
       if (play.matchup?.pitcher?.id !== playerId) continue;
       for (const event of play.playEvents || []) {
         if (!event.isPitch) continue;
-        const code = event.details?.type?.code || '';
-        if (!FASTBALL_CODES.has(code)) continue;
+        const resultCode = event.details?.code || '';
+        // Whiff rate — all pitch types
+        if (SWING_CODES.has(resultCode)) {
+          swings++;
+          if (WHIFF_CODES.has(resultCode)) whiffs++;
+        }
+        // Fastball movement — fastball types only
+        const typeCode = event.details?.type?.code || '';
+        if (!FASTBALL_CODES.has(typeCode)) continue;
         const pd = event.pitchData || {};
-        if (pd.startSpeed)             speeds.push(parseFloat(pd.startSpeed));
-        if (pd.breaks?.breakVerticalInduced != null) ivbs.push(parseFloat(pd.breaks.breakVerticalInduced));
-        if (pd.breaks?.breakHorizontal != null)      hbs.push(Math.abs(parseFloat(pd.breaks.breakHorizontal)));
-        if (pd.breaks?.spinRate != null)             spinRates.push(parseFloat(pd.breaks.spinRate));
+        if (pd.startSpeed)                              speeds.push(parseFloat(pd.startSpeed));
+        if (pd.breaks?.breakVerticalInduced != null)    ivbs.push(parseFloat(pd.breaks.breakVerticalInduced));
+        if (pd.breaks?.breakHorizontal != null)         hbs.push(Math.abs(parseFloat(pd.breaks.breakHorizontal)));
+        if (pd.breaks?.spinRate != null)                spinRates.push(parseFloat(pd.breaks.spinRate));
       }
     }
   }
 
   const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
-  const data = { velocity: avg(speeds), ivb: avg(ivbs), absHb: avg(hbs), spinRate: avg(spinRates) };
+  const data = {
+    velocity:  avg(speeds),
+    ivb:       avg(ivbs),
+    absHb:     avg(hbs),
+    spinRate:  avg(spinRates),
+    whiffRate: swings > 0 ? whiffs / swings : null,
+  };
   lsSet(cacheKey, data);
   return data;
 }
