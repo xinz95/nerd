@@ -98,6 +98,18 @@ async function cached(key, ttl, fetcher) {
   return data;
 }
 
+// Load pre-baked static JSON for a completed season. Cached in localStorage
+// for 30 days so repeat visits within the season don't re-fetch the file.
+async function staticData(filename, lsKey) {
+  const hit = lsGet(lsKey, 86400 * 30);
+  if (hit !== null) return hit;
+  const resp = await fetch(`data/${filename}`);
+  if (!resp.ok) throw new Error(`Missing static data file: ${filename}`);
+  const data = await resp.json();
+  lsSet(lsKey, data);
+  return data;
+}
+
 // ---------------------------------------------------------------------------
 // Raw fetch
 // ---------------------------------------------------------------------------
@@ -169,6 +181,10 @@ function parseGameTimeET(iso) {
 }
 
 async function getPitcherSeasonStats(season, endDate = null) {
+  const currentYear = new Date().getFullYear();
+  if (season < currentYear && !endDate) {
+    return staticData(`pitcher_season_${season}.json`, `pitcher_season_static_${season}`);
+  }
   const key    = `pitcher_season_v5_${season}${endDate ? `_thru_${endDate}` : ''}`;
   const params = { stats: 'season', group: 'pitching', season, sportId: 1, gameType: 'R', limit: 2000, playerPool: 'All' };
   if (endDate) params.endDate = endDate;
@@ -204,6 +220,10 @@ async function getPitcherSeasonStats(season, endDate = null) {
 }
 
 async function getPitcherSabermetrics(season, endDate = null) {
+  const currentYear = new Date().getFullYear();
+  if (season < currentYear && !endDate) {
+    return staticData(`pitcher_saber_${season}.json`, `pitcher_saber_static_${season}`);
+  }
   const key    = `pitcher_saber_all_${season}${endDate ? `_thru_${endDate}` : ''}`;
   const params = { stats: 'sabermetrics', group: 'pitching', season, sportId: 1, limit: 2000, playerPool: 'All' };
   if (endDate) params.endDate = endDate;
@@ -225,6 +245,10 @@ async function getPitcherSabermetrics(season, endDate = null) {
 }
 
 async function getHittingSabermetrics(season, endDate = null) {
+  const currentYear = new Date().getFullYear();
+  if (season < currentYear && !endDate) {
+    return staticData(`hitting_saber_${season}.json`, `hitting_saber_static_${season}`);
+  }
   const key    = `hitting_saber_all_${season}${endDate ? `_thru_${endDate}` : ''}`;
   const params = { stats: 'sabermetrics', group: 'hitting', season, sportId: 1, limit: 2000, playerPool: 'All' };
   if (endDate) params.endDate = endDate;
@@ -249,6 +273,10 @@ async function getHittingSabermetrics(season, endDate = null) {
 // Returns { playerId: plateAppearances } from the season hitting stats endpoint,
 // which reliably includes plateAppearances unlike the sabermetrics endpoint.
 async function getHittingSeasonStats(season, endDate = null) {
+  const currentYear = new Date().getFullYear();
+  if (season < currentYear && !endDate) {
+    return staticData(`hitting_season_pa_${season}.json`, `hitting_season_pa_static_${season}`);
+  }
   const key    = `hitting_season_pa_${season}${endDate ? `_thru_${endDate}` : ''}`;
   const params = { stats: 'season', group: 'hitting', season, sportId: 1, limit: 2000, playerPool: 'All', gameType: 'R' };
   if (endDate) params.endDate = endDate;
@@ -267,6 +295,10 @@ async function getHittingSeasonStats(season, endDate = null) {
 }
 
 async function getStandings(season, endDate = null) {
+  const currentYear = new Date().getFullYear();
+  if (season < currentYear && !endDate) {
+    return staticData(`standings_${season}.json`, `standings_static_${season}`);
+  }
   const key    = `standings_${season}${endDate ? `_thru_${endDate}` : ''}`;
   const params = { leagueId: '103,104', season };
   if (endDate) params.date = endDate; // standings endpoint uses 'date' not 'endDate'
@@ -387,6 +419,13 @@ async function getPitcherPitchData(playerId, season, nGames = 5, beforeDate = nu
 }
 
 async function getPitcherPitchDataParallel(pitcherIds, season, beforeDate = null) {
+  const currentYear = new Date().getFullYear();
+  if (season < currentYear && !beforeDate) {
+    const allData = await staticData(`pitchdata_${season}.json`, `pitchdata_static_${season}`);
+    const map = {};
+    for (const pid of pitcherIds) map[pid] = allData[pid] ?? null;
+    return map;
+  }
   const results = await Promise.allSettled(
     pitcherIds.map(pid => getPitcherPitchData(pid, season, 5, beforeDate))
   );
