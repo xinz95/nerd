@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Script versioning (browser cache busting)
+
+Every JS file in `docs/` is loaded with a `?v=N` query string in the HTML files.
+**Always bump the version number when modifying a JS file**, or browsers will serve the stale cached version.
+
+Rules:
+- Bump the `?v=` for every JS file you modify in a commit.
+- `pnerd-loader.js` is referenced by **both** `index.html` and `pitchers.html` — bump it in both.
+- `utils.js` is also on all pages — bump it in `index.html`, `pitchers.html`, and `teams.html`.
+- Increment by 1 (e.g. `v=8` → `v=9`). Never reuse a version number for changed content.
+
 ## Running the project
 
 **Static frontend (active, recommended):**
