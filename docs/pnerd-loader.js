@@ -11,8 +11,7 @@
 // computed pNERD result so repeated calls within the same session are instant.
 // ---------------------------------------------------------------------------
 
-
-
+/**
  * Loads pNERD scores for every starter in `statsYear`.
  *
  * @param {number}      statsYear  - Season year to pull stats from (e.g. 2025)
