@@ -27,6 +27,19 @@ function nerdColor(score) {
   return `rgb(${r},${g},${b})`;
 }
 
+// Minimum innings-pitched threshold for qualifying in pNERD.
+// Scales with how far into the current season we are.
+// Completed seasons always use 50 (full-season standard).
+function getMinIp(statsYear) {
+  const currentYear = new Date().getFullYear();
+  if (statsYear < currentYear) return 50;
+  const month = new Date().getMonth() + 1; // 1-indexed
+  if (month <= 5) return 20;  // May (or earlier current-year query)
+  if (month === 6) return 30;
+  if (month === 7) return 40;
+  return 50;                  // August and beyond
+}
+
 // Cell coloring from directional z-score (positive = good)
 function zStyle(z) {
   if (z == null) return '';

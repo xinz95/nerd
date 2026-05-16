@@ -30,7 +30,7 @@ function renderCard(game) {
     used_fip_fallback: ['', 'FIP used'],
     no_pitch_data:     ['', 'no pitch data'],
     insufficient_data: ['', 'limited data'],
-    prior_year_stats:  ['', '2025 stats'],
+    prior_year_stats:  ['', `${new Date().getFullYear() - 1} stats`],
   };
   const seen = new Set();
   const flagsHtml = (game.flags || [])

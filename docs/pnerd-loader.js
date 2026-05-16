@@ -11,11 +11,8 @@
 // computed pNERD result so repeated calls within the same session are instant.
 // ---------------------------------------------------------------------------
 
-// Minimum games started to be included in the pNERD z-score population.
-// Value is encoded in the cache key — changing it auto-invalidates old entries.
-const PNERD_MIN_GS = 10;
 
-/**
+
  * Loads pNERD scores for every starter in `statsYear`.
  *
  * @param {number}      statsYear  - Season year to pull stats from (e.g. 2025)
@@ -30,7 +27,10 @@ async function loadAllPnerds(statsYear, endDate = null) {
   // away so both pages hit the same cache key.
   const effectiveEnd = statsYear < currentYear ? null : endDate;
 
-  const cacheKey = `pnerds_all_gs${PNERD_MIN_GS}_${statsYear}${effectiveEnd ? `_thru_${effectiveEnd}` : ''}`;
+  // Use IP-based threshold scaled to how far into the season we are.
+  // Encoded in the cache key so entries auto-invalidate when the month rolls over.
+  const minIp = getMinIp(statsYear);
+  const cacheKey = `pnerds_all_ip${minIp}_${statsYear}${effectiveEnd ? `_thru_${effectiveEnd}` : ''}`;
   const hit = lsGet(cacheKey, 3600);
   if (hit !== null) return hit;
 
@@ -39,7 +39,7 @@ async function loadAllPnerds(statsYear, endDate = null) {
     getPitcherSabermetrics(statsYear, effectiveEnd),
   ]);
 
-  const starters = Object.entries(seasonStats).filter(([, s]) => s.gamesStarted >= PNERD_MIN_GS);
+  const starters = Object.entries(seasonStats).filter(([, s]) => (s.ip || 0) >= minIp);
   const starterIds  = starters.map(([pid]) => Number(pid));
   const starterStats = Object.fromEntries(starters);
 

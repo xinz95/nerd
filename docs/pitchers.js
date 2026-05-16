@@ -78,7 +78,7 @@ async function loadPitchers() {
 
     // Build display rows — require at least 10 GS to filter out spot starters.
     const allPitcherIds = Object.entries(seasonStats)
-      .filter(([, s]) => s.gamesStarted >= 10)
+      .filter(([, s]) => (s.ip || 0) >= getMinIp(statsYear))
       .map(([pid]) => Number(pid));
 
     allRows = allPitcherIds
