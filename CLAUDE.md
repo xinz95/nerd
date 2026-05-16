@@ -59,7 +59,7 @@ Pages and their JS files (loaded via `<script>` tags, all versioned with `?v=N` 
 
 - **`nerd.js`** — Pure computation, no I/O. `computeAllPnerds(seasonStats, saberStats, pitchDataMap, minIp)` returns `{ pnerds, flags, components }`. `computeAllTnerds(standings, hittingSaber)` returns `{ tnerds, components }`. `computeGameNerd(...)`. `blendPitcherStats(...)` exists but is no longer called by the app (superseded by the date-based early-season logic).
 
-- **`pnerd-loader.js`** — Shared loader that fetches all data needed for pNERD and calls `computeAllPnerds`. Used by both `app.js` and `pitchers.js` so the qualifying population and scores are identical across pages. Cache key includes GS threshold for auto-invalidation.
+- **`pnerd-loader.js`** — Shared loader that fetches all data needed for pNERD and calls `computeAllPnerds`. Used by both `app.js` and `pitchers.js` so the qualifying population and scores are identical across pages. Cache key includes the compound IP+GS threshold for auto-invalidation when the month rolls over.
 
 - **`app.js`** — Orchestration, rendering, date nav, cache busting. `loadGames(date)` is the main pipeline: fetch all data → use prior-year stats if March/April → fetch pitch data for ALL qualifying starters (not just today's probable starters, so pNERD z-scores are normalized over the same population as the pitcher list page) → compute scores → render sorted cards.
 
@@ -71,7 +71,7 @@ Pages and their JS files (loaded via `<script>` tags, all versioned with `?v=N` 
 
 ### pNERD formula (`docs/nerd.js`)
 
-All components z-scored across qualifying pitchers (min 10 GS), clipped to ±2σ and mapped to 0–10 via `zToTen`:
+All components z-scored across qualifying pitchers (month-scaled threshold: May IP≥30||GS≥5, June IP≥50||GS≥6, July GS≥7, Aug GS≥8, Sep+ GS≥10; prior/completed seasons use GS≥10), clipped to ±2σ and mapped to 0–10 via `zToTen`:
 
 | Component | Weight | Notes |
 |---|---|---|

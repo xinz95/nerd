@@ -26,10 +26,11 @@ async function loadAllPnerds(statsYear, endDate = null) {
   // away so both pages hit the same cache key.
   const effectiveEnd = statsYear < currentYear ? null : endDate;
 
-  // Use IP-based threshold scaled to how far into the season we are.
+  // Use IP+GS compound threshold scaled to how far into the season we are.
   // Encoded in the cache key so entries auto-invalidate when the month rolls over.
-  const minIp = getMinIp(statsYear);
-  const cacheKey = `pnerds_all_ip${minIp}_${statsYear}${effectiveEnd ? `_thru_${effectiveEnd}` : ''}`;
+  const { minIp, minGs } = getQualifyingThreshold(statsYear);
+  const threshKey = `ip${minIp === Infinity ? 'x' : minIp}gs${minGs}`;
+  const cacheKey = `pnerds_all_${threshKey}_${statsYear}${effectiveEnd ? `_thru_${effectiveEnd}` : ''}`;
   const hit = lsGet(cacheKey, 3600);
   if (hit !== null) return hit;
 
@@ -38,7 +39,9 @@ async function loadAllPnerds(statsYear, endDate = null) {
     getPitcherSabermetrics(statsYear, effectiveEnd),
   ]);
 
-  const starters = Object.entries(seasonStats).filter(([, s]) => (s.ip || 0) >= minIp);
+  const starters = Object.entries(seasonStats).filter(
+    ([, s]) => (s.ip || 0) >= minIp || (s.gamesStarted || 0) >= minGs
+  );
   const starterIds  = starters.map(([pid]) => Number(pid));
   const starterStats = Object.fromEntries(starters);
 

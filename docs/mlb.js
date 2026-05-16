@@ -98,10 +98,10 @@ async function cached(key, ttl, fetcher) {
   return data;
 }
 
-// Load pre-baked static JSON for a completed season. Cached in localStorage
-// for 30 days so repeat visits within the season don't re-fetch the file.
-async function staticData(filename, lsKey) {
-  const hit = lsGet(lsKey, 86400 * 30);
+// Load pre-baked static JSON for a season. Cached in localStorage with the
+// given TTL (default 30 days for completed seasons, 7 days for current season).
+async function staticData(filename, lsKey, ttl = 86400 * 30) {
+  const hit = lsGet(lsKey, ttl);
   if (hit !== null) return hit;
   const resp = await fetch(`data/${filename}`);
   if (!resp.ok) throw new Error(`Missing static data file: ${filename}`);
@@ -425,6 +425,22 @@ async function getPitcherPitchDataParallel(pitcherIds, season, beforeDate = null
     const map = {};
     for (const pid of pitcherIds) map[pid] = allData[pid] ?? null;
     return map;
+  }
+  // For the current year with no beforeDate, try the weekly-prebaked static file first.
+  // This avoids hundreds of live API calls after GitHub Actions refreshes the file.
+  if (!beforeDate) {
+    try {
+      const allData = await staticData(
+        `pitchdata_${season}.json`,
+        `pitchdata_static_${season}`,
+        7 * 86400  // 7-day TTL so it re-fetches after the weekly CI refresh
+      );
+      const map = {};
+      for (const pid of pitcherIds) map[pid] = allData[pid] ?? null;
+      return map;
+    } catch {
+      // Static file not yet generated — fall through to live fetching below.
+    }
   }
   const results = await Promise.allSettled(
     pitcherIds.map(pid => getPitcherPitchData(pid, season, 5, beforeDate))

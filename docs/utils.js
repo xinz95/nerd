@@ -27,17 +27,19 @@ function nerdColor(score) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Minimum innings-pitched threshold for qualifying in pNERD.
-// Scales with how far into the current season we are.
-// Completed seasons always use 50 (full-season standard).
-function getMinIp(statsYear) {
+// Qualifying threshold for pNERD — scales with how far into the current season we are.
+// Returns { minIp, minGs }; a pitcher qualifies if EITHER condition is met.
+// Use Infinity for minIp when there is no IP floor (GS-only months).
+// Completed seasons always use GS ≥ 10 (full-season standard).
+function getQualifyingThreshold(statsYear) {
   const currentYear = new Date().getFullYear();
-  if (statsYear < currentYear) return 50;
+  if (statsYear < currentYear) return { minIp: Infinity, minGs: 10 };
   const month = new Date().getMonth() + 1; // 1-indexed
-  if (month <= 5) return 20;  // May (or earlier current-year query)
-  if (month === 6) return 30;
-  if (month === 7) return 40;
-  return 50;                  // August and beyond
+  if (month <= 5) return { minIp: 30, minGs: 5 };   // May
+  if (month === 6) return { minIp: 50, minGs: 6 };   // June
+  if (month === 7) return { minIp: Infinity, minGs: 7 };  // July
+  if (month === 8) return { minIp: Infinity, minGs: 8 };  // August
+  return { minIp: Infinity, minGs: 10 };              // September and beyond
 }
 
 // Cell coloring from directional z-score (positive = good)
